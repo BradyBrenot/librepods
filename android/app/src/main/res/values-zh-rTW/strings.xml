@@ -152,8 +152,6 @@
     <string name="set_identity_resolving_key_description">手動設定用於解析 BLE 隨機位址的 IRK 值</string>
     <string name="set_encryption_key">設定加密金鑰</string>
     <string name="set_encryption_key_description">手動設定用於解密 BLE 廣播的 ENC_KEY 值</string>
-    <string name="use_alternate_head_tracking_packets">使用替代頭部追蹤封包</string>
-    <string name="use_alternate_head_tracking_packets_description">如果頭部追蹤對你無效，請啟用此選項。這會傳送不同的資料給 AirPods 以請求/停止頭部追蹤資料。</string>
     <string name="act_as_an_apple_device">作為 Apple 裝置</string>
     <string name="act_as_an_apple_device_description">啟用多裝置連線及輔助使用功能，例如自訂通透模式（增強、音色、環境噪音抑制、對話增強及 EQ）。</string>
     <string name="act_as_an_apple_device_warning">可能不穩定！！你的 AirPods 最多只能同時連接兩個裝置。如果你正與 iPad 或 Mac 等 Apple 裝置搭配使用，請先連接該裝置，然後再連接你的 Android。</string>

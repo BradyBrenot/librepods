@@ -73,12 +73,17 @@ import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import me.kavishdevar.librepods.BuildConfig
 import me.kavishdevar.librepods.MainActivity
@@ -135,6 +140,12 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "AirPodsService"
+
+/** Requested interval for head-tracking streams: 40 000 us = 25 Hz. */
+private const val HEAD_TRACKING_INTERVAL_MICROS = 40_000
+
+/** Spacing between the stream 14 activation request and the stream 16 motion request. */
+private const val HEAD_TRACKING_STREAM_START_DELAY_MS = 200L
 
 object ServiceManager {
     private var service: AirPodsService? = null
@@ -696,6 +707,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 //                    isConnectedLocally = false
                     popupShown = false
                     updateNotificationContent(false)
+                    resetHeadTrackingState()
                     aacpManager.disconnected()
                     BluetoothConnectionManager.aacpSocket = null
                     BluetoothConnectionManager.attSocket = null
@@ -2520,10 +2532,11 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                     if (takingOverFor == "music") {
                         Log.d(TAG, "Resuming music after taking control")
                         MediaController.sendPlay(replayWhenPaused = true)
-                    } else if (startHeadTrackingAgain) {
+                    } else if (startHeadTrackingAgain && isHeadTrackingActive) {
                         Log.d(TAG, "Starting head tracking again after taking control")
                         Handler(Looper.getMainLooper()).postDelayed({
-                            startHeadTracking()
+                            // The user may have stopped tracking while the takeover was in flight.
+                            if (isHeadTrackingActive) startHeadTracking(forceRestart = true)
                         }, 500)
                     }
                     delay(1000) // should ideally have a callback when it's taken over because for some reason android doesn't dispatch when it's paused
@@ -2782,6 +2795,14 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                                 })
                                 val bytes = buffer.copyOfRange(0, bytesRead)
                                 val formattedHex = bytes.joinToString(" ") { "%02X".format(it) }
+                                // Debug-only raw capture of head-tracking packets (including the
+                                // short status replies). The packet log below deliberately drops
+                                // 0x17 packets, so this is the only raw view of them.
+                                if (BuildConfig.DEBUG && data.size > 4 && data[4] == AACPManager.Companion.Opcodes.HEADTRACKING) {
+                                    Log.d(
+                                        "HeadTrackingRaw", "RX 0x17 len=${data.size}: $formattedHex"
+                                    )
+                                }
 //                                    CrossDevice.sendReceivedPacket(bytes)
                                 updateNotificationContent(
                                     true,
@@ -3105,6 +3126,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         clearPacketLogs()
         Log.d(TAG, "Service stopped is being destroyed for some reason!")
 
+        resetHeadTrackingState()
+        headTrackingScope.cancel()
+
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
 
         try {
@@ -3140,39 +3164,115 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         super.onDestroy()
     }
 
+    @Volatile
     var isHeadTrackingActive = false
+        private set
 
-    fun startHeadTracking() {
-        isHeadTrackingActive = true
-        val useAlternatePackets =
-            sharedPreferences.getBoolean("use_alternate_head_tracking_packets", true)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && aacpManager.getControlCommandStatus(
-                AACPManager.Companion.ControlCommandIdentifiers.OWNS_CONNECTION
-            )?.value?.get(0)?.toInt() != 1
-        ) {
-            takeOver("call", startHeadTrackingAgain = true)
-            Log.d(TAG, "Taking over for head tracking")
-        } else {
-            Log.w(TAG, "Will not be taking over for head tracking, might not work.")
+    /**
+     * Owns all head-tracking packet writes. Start/stop are serialized through
+     * [headTrackingMutex] so a delayed motion request can never overtake a stop request.
+     */
+    private val headTrackingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val headTrackingMutex = Mutex()
+    private var headTrackingStartJob: Job? = null
+    private val headTrackingStartLock = Any()
+
+    /** Invalidates pending start/stop work when tracking is restarted or torn down. */
+    @Volatile
+    private var headTrackingGeneration = 0
+
+    /**
+     * Requests both head-tracking streams from the AirPods.
+     *
+     * Stream 14 (activation/status) has to be requested first: the accessory only starts
+     * sending stream 16 motion samples after that. The requests are sent from a background
+     * coroutine, [HEAD_TRACKING_STREAM_START_DELAY_MS] apart. Repeated calls while tracking is
+     * active are ignored unless [forceRestart] is set (used after a fresh takeover).
+     */
+    fun startHeadTracking(forceRestart: Boolean = false) {
+        val generation: Int
+        synchronized(headTrackingStartLock) {
+            if (isHeadTrackingActive && !forceRestart) {
+                Log.d(TAG, "Head tracking is already active, not sending duplicate start requests")
+                return
+            }
+            isHeadTrackingActive = true
+            generation = ++headTrackingGeneration
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && aacpManager.getControlCommandStatus(
+                    AACPManager.Companion.ControlCommandIdentifiers.OWNS_CONNECTION
+                )?.value?.get(0)?.toInt() != 1
+            ) {
+                takeOver("call", startHeadTrackingAgain = true)
+                Log.d(TAG, "Taking over for head tracking")
+            } else {
+                Log.w(TAG, "Will not be taking over for head tracking, might not work.")
+            }
+            headTrackingStartJob?.cancel()
+            headTrackingStartJob = headTrackingScope.launch {
+                headTrackingMutex.withLock {
+                    if (!isHeadTrackingGenerationCurrent(generation)) return@launch
+                    requestHeadTrackingStream(
+                        AACPManager.HEAD_TRACKING_STREAM_ACTIVATION, "activation"
+                    )
+                }
+                delay(HEAD_TRACKING_STREAM_START_DELAY_MS)
+                headTrackingMutex.withLock {
+                    if (!isHeadTrackingGenerationCurrent(generation)) return@launch
+                    requestHeadTrackingStream(AACPManager.HEAD_TRACKING_STREAM_MOTION, "motion")
+                }
+            }
+            HeadTracking.reset()
         }
-        if (useAlternatePackets) {
-            aacpManager.sendDataPacket(aacpManager.createAlternateStartHeadTrackingPacket())
-        } else {
-            aacpManager.sendStartHeadTracking()
-        }
-        HeadTracking.reset()
+    }
+
+    private fun isHeadTrackingGenerationCurrent(generation: Int): Boolean =
+        isHeadTrackingActive && headTrackingGeneration == generation
+
+    private fun requestHeadTrackingStream(stream: Byte, name: String) {
+        Log.d(TAG, "Requesting head tracking $name stream (${stream.toInt()})")
+        aacpManager.sendDataPacket(
+            aacpManager.createHeadTrackingRequestPacket(stream, HEAD_TRACKING_INTERVAL_MICROS)
+        )
     }
 
     fun stopHeadTracking() {
-        val useAlternatePackets =
-            sharedPreferences.getBoolean("use_alternate_head_tracking_packets", true)
-        if (useAlternatePackets) {
-            aacpManager.sendDataPacket(aacpManager.createAlternateStopHeadTrackingPacket())
-        } else {
-            aacpManager.sendStopHeadTracking()
+        val generation: Int
+        synchronized(headTrackingStartLock) {
+            isHeadTrackingActive = false
+            generation = ++headTrackingGeneration
+            headTrackingStartJob?.cancel()
+            headTrackingStartJob = null
         }
-        isHeadTrackingActive = false
-        gestureDetector?.stopDetection()
+        headTrackingScope.launch {
+            headTrackingMutex.withLock {
+                // A newer start superseded this stop; leave the fresh streams alone.
+                if (generation != headTrackingGeneration) return@launch
+                // Stream 16 keeps running after stream 14 is stopped, so stop both explicitly.
+                aacpManager.sendDataPacket(
+                    aacpManager.createHeadTrackingRequestPacket(
+                        AACPManager.HEAD_TRACKING_STREAM_MOTION, 0
+                    )
+                )
+                aacpManager.sendDataPacket(
+                    aacpManager.createHeadTrackingRequestPacket(
+                        AACPManager.HEAD_TRACKING_STREAM_ACTIVATION, 0
+                    )
+                )
+            }
+        }
+        // Avoid the stopDetection() -> stopHeadTracking() bounce.
+        gestureDetector?.stopDetection(doNotStop = true)
+    }
+
+    /** Drops head-tracking state without touching the socket (disconnect/teardown). */
+    private fun resetHeadTrackingState() {
+        synchronized(headTrackingStartLock) {
+            isHeadTrackingActive = false
+            headTrackingGeneration++
+            headTrackingStartJob?.cancel()
+            headTrackingStartJob = null
+        }
+        HeadTracking.reset()
     }
 
     @SuppressLint("MissingPermission")

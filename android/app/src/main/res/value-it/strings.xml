@@ -150,8 +150,6 @@
         <string name="set_identity_resolving_key_description">Imposta manualmente il valore IRK utilizzato per risolvere gli indirizzi casuali BLE</string>
         <string name="set_encryption_key">Imposta Chiave di Crittografia</string>
         <string name="set_encryption_key_description">Imposta manualmente il valore ENC_KEY utilizzato per decrittografare le pubblicità BLE</string>
-        <string name="use_alternate_head_tracking_packets">Utilizza pacchetti alternativi di tracciamento della testa</string>
-        <string name="use_alternate_head_tracking_packets_description">Abilita questo se il tracciamento della testa non funziona per te. Questo invia dati diversi agli AirPods per richiedere/interrompere i dati di tracciamento della testa.</string>
         <string name="act_as_an_apple_device">Comportati come un dispositivo Apple</string>
         <string name="act_as_an_apple_device_description">Abilita la connettività multi-dispositivo e le funzionalità di Accessibilità come la personalizzazione della modalità Trasparenza (amplificazione, tono, riduzione del rumore ambientale, potenziamento conversazione ed EQ)</string>
         <string name="act_as_an_apple_device_warning">Potrebbe essere instabile!! Un massimo di due dispositivi possono essere connessi ai tuoi AirPods. Se li stai usando con un dispositivo Apple come un iPad o un Mac, connetti prima quel dispositivo e poi il tuo Android.</string>

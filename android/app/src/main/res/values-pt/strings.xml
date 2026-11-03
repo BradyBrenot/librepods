@@ -149,8 +149,6 @@
     <string name="set_identity_resolving_key_description">Defina manualmente o valor IRK usado para resolver endereços aleatórios BLE</string>
     <string name="set_encryption_key">Definir Chave de Criptografia</string>
     <string name="set_encryption_key_description">Defina manualmente o valor ENC_KEY usado para descriptografar anúncios BLE</string>
-    <string name="use_alternate_head_tracking_packets">Usar pacotes alternativos de rastreamento de cabeça</string>
-    <string name="use_alternate_head_tracking_packets_description">Habilite isso se o rastreamento de cabeça não funcionar para você. Isso envia dados diferentes para os AirPods para solicitar/parar dados de rastreamento de cabeça.</string>
     <string name="act_as_an_apple_device">Agir como um dispositivo Apple</string>
     <string name="act_as_an_apple_device_description">Habilita conectividade multi-dispositivo e recursos de Acessibilidade como personalização do modo de transparência (amplificação, tom, redução de ruído ambiental, amplificação de conversa e equalizador)</string>
     <string name="act_as_an_apple_device_warning">Pode ser instável!! Um máximo de dois dispositivos pode estar conectado aos seus AirPods. Se você estiver usando com um dispositivo Apple como iPad ou Mac, então conecte esse dispositivo primeiro e depois seu Android.</string>

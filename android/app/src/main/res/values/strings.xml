@@ -155,8 +155,6 @@
     <string name="set_identity_resolving_key_description">Manually set the IRK value used for resolving BLE random addresses</string>
     <string name="set_encryption_key">Set Encryption Key</string>
     <string name="set_encryption_key_description">Manually set the ENC_KEY value used for decrypting BLE advertisements</string>
-    <string name="use_alternate_head_tracking_packets">Use alternate head tracking packets</string>
-    <string name="use_alternate_head_tracking_packets_description">Enable this if head tracking doesn\'t work for you. This sends different data to AirPods for requesting/stopping head tracking data.</string>
     <string name="act_as_an_apple_device">Act as an Apple device</string>
     <string name="act_as_an_apple_device_description">Enables multi-device connectivity and Accessibility features like customizing transparency mode (amplification, tone, ambient noise reduction, conversation boost, and EQ)</string>
     <string name="act_as_an_apple_device_warning">Might be unstable!! A maximum of two devices can be connected to your AirPods. If you are using with an Apple device like an iPad or Mac, then please connect that device first and then your Android.</string>

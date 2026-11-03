@@ -149,8 +149,6 @@
     <string name="set_identity_resolving_key_description">Den IRK manuell festlegen, der zur Auflösung zufälliger BLE-Adressen verwendet wird</string>
     <string name="set_encryption_key">Verschlüsselungsschlüssel festlegen</string>
     <string name="set_encryption_key_description">Den ENC_KEY manuell festlegen, der zur Entschlüsselung von BLE-Advertisements verwendet wird</string>
-    <string name="use_alternate_head_tracking_packets">Alternative Head-Tracking-Pakete verwenden</string>
-    <string name="use_alternate_head_tracking_packets_description">Aktiviere das, wenn Head-Tracking bei dir nicht funktioniert. Es werden andere Daten an die AirPods gesendet, um Head-Tracking-Daten anzufordern oder zu stoppen.</string>
     <string name="act_as_an_apple_device">Als Apple-Gerät ausgeben</string>
     <string name="act_as_an_apple_device_description">Aktiviert die Mehrgeräte-Verbindung und Bedienungshilfen wie das Anpassen des Transparenzmodus (Verstärkung, Klang, Umgebungsgeräusch-Reduzierung, Gesprächsverstärker und EQ)</string>
     <string name="act_as_an_apple_device_warning">Möglicherweise instabil! Mit deinen AirPods können maximal zwei Geräte gleichzeitig verbunden sein. Wenn du sie mit einem Apple-Gerät wie einem iPad oder Mac verwendest, verbinde bitte zuerst dieses Gerät und danach dein Android.</string>

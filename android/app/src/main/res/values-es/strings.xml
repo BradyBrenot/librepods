@@ -149,8 +149,6 @@
     <string name="set_identity_resolving_key_description">Configura manualmente valor utilizado IRK para resolver direcciones aleatorias BLE.</string>
     <string name="set_encryption_key">Establecer Clave de Cifrado (ENC_KEY)</string>
     <string name="set_encryption_key_description">Configurar manualmente valor ENC_KEY utilizado para descifrar BLE cifrado.</string>
-    <string name="use_alternate_head_tracking_packets">Utilizar paquetes head tracking alternativos</string>
-    <string name="use_alternate_head_tracking_packets_description">Activar si head tracking no funciona. Esto enviará datos distintos a AirPods para solicitar/detener datos head tracking.</string>
     <string name="act_as_an_apple_device">Actuar como dispositivo Apple</string>
     <string name="act_as_an_apple_device_description">Activa conectividad multidispositivo y funciones de Accesibilidad como modo transparencia personalizado (amplificación, tono, reducción de ruido ambiente, potenciador de conversaciones, y EQ).</string>
     <string name="act_as_an_apple_device_warning">¡Puede ser inestable! Se puede conectar como máximo dos dispositivos a tus AirPods. Si estás utilizando un dispositivo de Apple, como un iPad o Mac, por favor conéctalo antes y posteriormente conecta tu dispositivo Android.</string>

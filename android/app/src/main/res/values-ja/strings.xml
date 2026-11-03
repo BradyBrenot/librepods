@@ -155,8 +155,6 @@
     <string name="set_identity_resolving_key_description">BLEランダムアドレスの解決に使用するIRK値を手動で設定します</string>
     <string name="set_encryption_key">暗号化キー (ENC_KEY) を設定</string>
     <string name="set_encryption_key_description">BLEアドバタイズの復号に使用するENC_KEY値を手動で設定します</string>
-    <string name="use_alternate_head_tracking_packets">代替のヘッドトラッキングパケットを使用</string>
-    <string name="use_alternate_head_tracking_packets_description">ヘッドトラッキングが機能しない場合に有効にしてください。ヘッドトラッキングデータの要求・停止時に異なるデータをAirPodsへ送信します。</string>
     <string name="act_as_an_apple_device">Appleデバイスとして振る舞う</string>
     <string name="act_as_an_apple_device_description">マルチデバイス接続や、外部音取り込みモードのカスタマイズ（増幅、トーン、環境ノイズ除去、会話を強調、イコライザ）などのアクセシビリティ機能を有効にします。</string>
     <string name="act_as_an_apple_device_warning">動作が不安定になる可能性があります！AirPodsには最大2台のデバイスを同時接続できます。iPadやMacなどのAppleデバイスと併用する場合は、先にAppleデバイスを接続してからAndroidを接続してください。</string>

@@ -23,6 +23,7 @@ package me.kavishdevar.librepods.bluetooth
 import android.util.Log
 import me.kavishdevar.librepods.data.Capability
 import me.kavishdevar.librepods.data.CustomEq
+import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -61,6 +62,15 @@ class AACPManager {
         }
 
         private val HEADER_BYTES = byteArrayOf(0x04, 0x00, 0x04, 0x00)
+
+        /**
+         * Head-tracking activation/status stream (14). It has to be requested before
+         * [HEAD_TRACKING_STREAM_MOTION] for the accessory to start sending motion samples.
+         */
+        const val HEAD_TRACKING_STREAM_ACTIVATION: Byte = 0x0E
+
+        /** Head-tracking motion sample stream (16). */
+        const val HEAD_TRACKING_STREAM_MOTION: Byte = 0x10
 
         data class ControlCommandStatus(
             val identifier: ControlCommandIdentifiers, val value: ByteArray
@@ -485,12 +495,8 @@ class AACPManager {
 
             Opcodes.HEADTRACKING -> {
                 if (packet.size < 70) {
-                    Log.w(
-                        TAG, "Received HEADTRACKING packet too short: ${
-                        packet.joinToString(" ") {
-                            "%02X".format(it)
-                        }
-                    }")
+                    // Stream status/ack replies are expected here; motion packets are larger.
+                    Log.d(TAG, "Received HEADTRACKING status packet (${packet.size} bytes)")
                     return
                 }
                 callback?.onHeadTrackingReceived(packet)
@@ -658,127 +664,66 @@ class AACPManager {
         )
     }
 
-    fun sendStartHeadTracking(): Boolean {
-        return sendDataPacket(createStartHeadTrackingPacket())
-    }
+    private var headTrackingSequence = 0x200
+    private val headTrackingSequenceLock = Any()
 
-    fun createStartHeadTrackingPacket(): ByteArray {
-        val opcode = byteArrayOf(Opcodes.HEADTRACKING, 0x00)
-        val data = byteArrayOf(
+    /**
+     * Builds a head-tracking (`0x17`) stream request.
+     *
+     * The payload is the protobuf message
+     * `08 <seq> 42 0B 08 <stream> 10 02 1A 05 01 <interval_us u32 LE>`, wrapped in the
+     * head-tracking request header. The sequence number identifies the request and is
+     * incremented for every request, so the length field is derived from the encoded
+     * payload instead of being hardcoded (the varint length of the sequence changes).
+     *
+     * Stream 14 ([HEAD_TRACKING_STREAM_ACTIVATION]) has to be requested at least once
+     * before stream 16 ([HEAD_TRACKING_STREAM_MOTION]); stream 16 keeps running after
+     * stream 14 is stopped. An interval of 0 stops the stream.
+     */
+    fun createHeadTrackingRequestPacket(stream: Byte, intervalMicros: Int): ByteArray {
+        require(intervalMicros >= 0) { "intervalMicros must not be negative" }
+        val sequence = synchronized(headTrackingSequenceLock) {
+            headTrackingSequence++
+        }
+        val body = ByteArrayOutputStream(21)
+        body.write(0x08)
+        body.write(encodeVarint(sequence))
+        body.write(0x42)
+        body.write(0x0B)
+        body.write(0x08)
+        body.write(stream.toInt())
+        body.write(0x10)
+        body.write(0x02)
+        body.write(0x1A)
+        body.write(0x05)
+        body.write(0x01)
+        body.write(intervalMicros and 0xFF)
+        body.write((intervalMicros ushr 8) and 0xFF)
+        body.write((intervalMicros ushr 16) and 0xFF)
+        body.write((intervalMicros ushr 24) and 0xFF)
+        val payload = body.toByteArray()
+        return byteArrayOf(
+            Opcodes.HEADTRACKING,
+            0x00,
             0x00,
             0x00,
             0x10,
             0x00,
-            0x10,
-            0x00,
-            0x08,
-            0xA1.toByte(),
-            0x02,
-            0x42,
-            0x0B,
-            0x08,
-            0x0E,
-            0x10,
-            0x02,
-            0x1A,
-            0x05,
-            0x01,
-            0x40,
-            0x9C.toByte(),
-            0x00,
-            0x00,
-        )
-        return opcode + data
-    }
-
-    fun createAlternateStartHeadTrackingPacket(): ByteArray {
-        val opcode = byteArrayOf(Opcodes.HEADTRACKING, 0x00)
-        val data = byteArrayOf(
-            0x00,
-            0x00,
-            0x10,
-            0x00,
-            0x0F,
-            0x00,
-            0x08,
-            0x73,
-            0x42,
-            0x0B,
-            0x08,
-            0x10,
-            0x10,
-            0x02,
-            0x1A,
-            0x05,
-            0x01,
-            0x40,
-            0x9C.toByte(),
-            0x00,
+            payload.size.toByte(),
             0x00
-        )
-        return opcode + data
+        ) + payload
     }
 
-    fun sendStopHeadTracking(): Boolean {
-        return sendDataPacket(createStopHeadTrackingPacket())
-    }
-
-    fun createStopHeadTrackingPacket(): ByteArray {
-        val opcode = byteArrayOf(Opcodes.HEADTRACKING, 0x00)
-        val data = byteArrayOf(
-            0x00,
-            0x00,
-            0x10,
-            0x00,
-            0x11,
-            0x00,
-            0x08,
-            0x7E,
-            0x10,
-            0x02,
-            0x42,
-            0x0B,
-            0x08,
-            0x4E,
-            0x10,
-            0x02,
-            0x1A,
-            0x05,
-            0x01,
-            0x00,
-            0x00,
-            0x00,
-            0x00
-        )
-        return opcode + data
-    }
-
-    fun createAlternateStopHeadTrackingPacket(): ByteArray {
-        val opcode = byteArrayOf(Opcodes.HEADTRACKING, 0x00)
-        val data = byteArrayOf(
-            0x00,
-            0x00,
-            0x10,
-            0x00,
-            0x0F,
-            0x00,
-            0x08,
-            0x75,
-            0x42,
-            0x0B,
-            0x08,
-            0x10,
-            0x10,
-            0x02,
-            0x1A,
-            0x05,
-            0x01,
-            0x00,
-            0x00,
-            0x00,
-            0x00
-        )
-        return opcode + data
+    private fun encodeVarint(value: Int): ByteArray {
+        require(value >= 0) { "varint must not be negative" }
+        val bytes = ByteArrayOutputStream(5)
+        var remaining = value
+        while (remaining >= 0x80) {
+            bytes.write((remaining and 0x7F) or 0x80)
+            remaining = remaining ushr 7
+        }
+        bytes.write(remaining)
+        return bytes.toByteArray()
     }
 
     fun sendRename(name: String): Boolean {

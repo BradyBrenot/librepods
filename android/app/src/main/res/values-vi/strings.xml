@@ -149,8 +149,6 @@
     <string name="set_identity_resolving_key_description">Đặt thủ công giá trị IRK được sử dụng để phân giải địa chỉ ngẫu nhiên BLE</string>
     <string name="set_encryption_key">Đặt khóa mã hóa</string>
     <string name="set_encryption_key_description">Đặt thủ công giá trị ENC_KEY được sử dụng để giải mã quảng cáo BLE</string>
-    <string name="use_alternate_head_tracking_packets">Sử dụng gói theo dõi đầu thay thế</string>
-    <string name="use_alternate_head_tracking_packets_description">Bật tính năng này nếu theo dõi chuyển động đầu không hoạt động. Điều này gửi dữ liệu khác đến AirPods để yêu cầu/dừng dữ liệu theo dõi chuyển động đầu.</string>
     <string name="act_as_an_apple_device">Hoạt động như thiết bị Apple</string>
     <string name="act_as_an_apple_device_description">Bật kết nối đa thiết bị và các tính năng Trợ năng như tùy chỉnh chế độ xuyên âm (khuếch đại, âm sắc, giảm tiếng ồn môi trường, tăng cường hội thoại và EQ)</string>
     <string name="act_as_an_apple_device_warning">Có thể không ổn định!! Tối đa hai thiết bị có thể kết nối với AirPods của bạn. Nếu bạn đang sử dụng với thiết bị Apple như iPad hoặc Mac, vui lòng kết nối thiết bị đó trước rồi mới đến Android.</string>

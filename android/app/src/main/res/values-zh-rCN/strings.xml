@@ -156,8 +156,6 @@
     <string name="set_identity_resolving_key_description">手动设置用于解析蓝牙低功耗随机地址的 IRK 值。</string>
     <string name="set_encryption_key">设置加密密钥</string>
     <string name="set_encryption_key_description">手动设置用于解密蓝牙低功耗广播的 ENC_KEY 值。</string>
-    <string name="use_alternate_head_tracking_packets">使用备用头部跟踪数据包</string>
-    <string name="use_alternate_head_tracking_packets_description">如果头部跟踪对你无效，请启用此选项。这将向 AirPods 发送不同的数据以请求/停止头部跟踪数据。</string>
     <string name="act_as_an_apple_device">模拟为 Apple 设备</string>
     <string name="act_as_an_apple_device_description">启用多设备连接和辅助功能，例如自定义通透模式（放大、音调、环境降噪、对话增强和均衡器）</string>
     <string name="act_as_an_apple_device_warning">可能不稳定！！你的 AirPods 最多可以连接两台设备。如果你正在与 iPad 或 Mac 等 Apple 设备一起使用，请先连接该设备，然后再连接你的 Android 设备。</string>

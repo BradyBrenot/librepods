@@ -149,8 +149,6 @@
     <string name="set_identity_resolving_key_description">BLE rastgele adreslerini çözmek için kullanılan IRK değerini manuel olarak ayarlayın</string>
     <string name="set_encryption_key">Şifreleme Anahtarı Ayarla</string>
     <string name="set_encryption_key_description">BLE duyurularını şifresini çözmek için kullanılan ENC_KEY değerini manuel olarak ayarlayın</string>
-    <string name="use_alternate_head_tracking_packets">Alternatif kafa takibi paketlerini kullan</string>
-    <string name="use_alternate_head_tracking_packets_description">Kafa takibi sizin için çalışmıyorsa bunu etkinleştirin. Bu, kafa takibi verilerini istemek/durdurmak için AirPods\'a farklı veriler gönderir.</string>
     <string name="act_as_an_apple_device">Apple cihazı gibi davran</string>
     <string name="act_as_an_apple_device_description">Çoklu cihaz bağlantısını ve Şeffaflık modunu özelleştirme (güçlendirme, ton, ortam gürültüsü azaltma, konuşma güçlendirme ve EQ) gibi Erişilebilirlik özelliklerini etkinleştirir</string>
     <string name="act_as_an_apple_device_warning">Kararsız olabilir!! AirPods\'unuza maksimum iki cihaz bağlanabilir. iPad veya Mac gibi bir Apple cihazıyla kullanıyorsanız, lütfen önce o cihazı, sonra Android\'inizi bağlayın.</string>

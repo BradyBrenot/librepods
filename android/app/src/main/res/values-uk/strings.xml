@@ -149,8 +149,6 @@
     <string name="set_identity_resolving_key_description">Вручну встановити значення IRK, що використовується для розпізнавання випадкових адрес BLE</string>
     <string name="set_encryption_key">Встановити Ключ Шифрування</string>
     <string name="set_encryption_key_description">Вручну встановити значення ENC_KEY, що використовується для розшифровки оголошень BLE</string>
-    <string name="use_alternate_head_tracking_packets">Використовувати альтернативні пакети відстеження голови</string>
-    <string name="use_alternate_head_tracking_packets_description">Ввімкніть це, якщо відстеження голови не працює у вас. Це надсилає різні дані до AirPods для запиту/зупинки даних відстеження голови.</string>
     <string name="act_as_an_apple_device">Діяти як пристрій Apple</string>
     <string name="act_as_an_apple_device_description">Увімкнює багатопристроєву з\'єднаність та функції доступності, такі як налаштування режиму проникності (підсилення, тон, зменшення навколишнього шуму, підсилення розмови та еквалайзер)</string>
     <string name="act_as_an_apple_device_warning">Може бути нестабільним!! Максимум два пристрої можуть бути підключені до ваших AirPods. Якщо ви використовуєте з пристроєм Apple, таким як iPad або Mac, то спочатку підключіть цей пристрій, а потім ваш Android.</string>

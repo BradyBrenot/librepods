@@ -341,14 +341,6 @@ fun AppSettingsScreen(
                 )
             }
 
-            StyledToggle(
-                title = stringResource(R.string.advanced_options), // shouldn't be here, but okay
-                label = stringResource(R.string.use_alternate_head_tracking_packets),
-                description = stringResource(R.string.use_alternate_head_tracking_packets_description),
-                checked = state.useAlternateHeadTrackingPackets,
-                onCheckedChange = viewModel::setUseAlternateHeadTrackingPackets,
-                enabled = state.isPremium
-            )
             Spacer(modifier = Modifier.height(16.dp))
         } else {
             Box(
