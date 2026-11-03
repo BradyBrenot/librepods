@@ -151,8 +151,10 @@ it.
   samples. Stream 16 only starts after stream 14 has been requested at least once. A client
   can request 14, then 16, then stop 14; 16 continues.
 - An interval of 0 stops that stream.
-- The interval is honoured: 40 000 us ~= 25 Hz, 20 000 us = 50 Hz, 10 000 us ~= 100 Hz.
-  Bluetooth delivery saturates at roughly 90-100 samples/s even below 10 ms.
+- The request uses 40 000 us. On the tested AirPods 4 ANC, a 20 000 us request was
+  ignored: the stream stayed at ~24-27 samples/s, so treat 40 000 as the known-good
+  request and measure the delivered rate (`HeadTrackingRate` in debug builds) rather than
+  assuming the requested rate.
 - Sequence numbers are request identifiers. Increment them for every request.
 
 ### 3.2 Sample layout

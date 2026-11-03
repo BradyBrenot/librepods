@@ -3252,8 +3252,13 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     @Volatile
     private var loggedUnparsedHeadTracking = false
 
+    @Volatile
     private var headTrackingRateSamples = 0
+
+    @Volatile
     private var headTrackingRatePackets = 0
+
+    @Volatile
     private var headTrackingRateStart = 0L
 
     /**

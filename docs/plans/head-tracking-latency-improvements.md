@@ -74,11 +74,13 @@ root or an audio-policy service change; leave the default 120 ms for now.
 
 ### 4. Sensor-gap discontinuity - implemented
 
-If consecutive samples are more than 200 ms apart (bud removal, link pause) or
-the relative quaternion is nearly antipodal (a pose wrap), `HeadTracking`
-increments the discontinuity counter, clears the previous pose, and reports a
-zero twist for that sample. Test:
-`sampleGapRaisesDiscontinuityAndDropsTheTwist`.
+If consecutive samples are more than 200 ms apart (bud removal, link pause),
+`HeadTracking` increments the discontinuity counter, reports a zero twist for
+that sample, and continues from the current sample as the new previous. A
+quaternion sign flip at the neutral antipode is deliberately **not** treated as
+a gap: `angularVelocity` already takes the shortest path, so the twist stays
+continuous. Tests: `sampleGapRaisesDiscontinuityAndDropsTheTwist` and
+`normalCadenceKeepsTwistAndDiscontinuity`.
 
 ### 5. Host-driven battery gating
 
@@ -103,10 +105,11 @@ immersive playback starts.
 
 ## Risks
 
-- A 50 Hz AirPods request increases AAP traffic and battery use; measure both.
-- A 100 Hz UHID writer increases Binder/CPU wakeups; the host interval is the
-  contract, but a 20 ms fallback is acceptable if 10 ms is unstable.
+- The 50 Hz and 100 Hz experiments are closed: the AirPods cap at ~25 samples/s
+  and the HAL at ~44 samples/s. Do not re-enable them without a new capture.
 - Prediction tuning can overshoot during acceleration; only change it after a
-  measured latency test.
+  measured latency test. Shell cannot set the property on the user build.
 - Host gating can make the first second of playback static if the stream is
   cold; pre-warm on A2DP playback if needed.
+- The 200 ms gap threshold assumes the 25 Hz source; re-check it if a faster
+  model is supported.

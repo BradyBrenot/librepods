@@ -230,6 +230,31 @@ class HeadTrackingParserTest {
     }
 
     @Test
+    fun normalCadenceKeepsTwistAndDiscontinuity() {
+        HeadTracking.reset()
+        repeat(25) { index ->
+            HeadTracking.processPacket(
+                packet(
+                    1,
+                    command(14, blob(4000, 0, 0, index * 40_000_000L, rotationRate = 5)),
+                ),
+            )
+        }
+        val before = HeadTracking.pose.value!!.discontinuity
+        HeadTracking.processPacket(
+            packet(
+                1,
+                command(14, blob(9000, 0, 0, 25 * 40_000_000L, rotationRate = 5)),
+            ),
+        )
+        val pose = HeadTracking.pose.value!!
+        assertEquals(before, pose.discontinuity)
+        val avNorm = kotlin.math.sqrt(pose.angularVelocity.sumOf { (it * it).toDouble() }).toFloat()
+        assertTrue(avNorm > 0.01f)
+        HeadTracking.reset()
+    }
+
+    @Test
     fun sampleGapRaisesDiscontinuityAndDropsTheTwist() {
         HeadTracking.reset()
         repeat(25) { index ->
@@ -244,7 +269,12 @@ class HeadTrackingParserTest {
         HeadTracking.processPacket(
             packet(
                 1,
-                command(14, blob(4000, 0, 0, 25 * 40_000_000L + 1_000_000_000L, rotationRate = 5)),
+                command(
+                    14,
+                    // Changed attitude and a 240 ms gap: without the gap branch this would
+                    // produce a non-zero twist (the legacy >500 ms guard does not catch it).
+                    blob(9000, 0, 0, 25 * 40_000_000L + 240_000_000L, rotationRate = 5),
+                ),
             ),
         )
         val pose = HeadTracking.pose.value!!

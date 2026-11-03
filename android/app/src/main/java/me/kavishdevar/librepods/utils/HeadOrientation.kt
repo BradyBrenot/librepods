@@ -66,6 +66,7 @@ object HeadTracking {
     private const val CALIBRATION_SAMPLE_COUNT = 10
     private const val POSE_CALIBRATION_SAMPLE_COUNT = 25
     private const val POSE_CALIBRATION_TIMEOUT_NANOS = 5_000_000_000L
+    /** Five missed 40 ms samples; a longer gap is a pause, not normal cadence. */
     private const val MAX_SAMPLE_GAP_NANOS = 200_000_000L
     /**
      * Sum of |rotation-rate| words. The captured AirPods 4 data is a few LSB at rest and
@@ -153,15 +154,16 @@ object HeadTracking {
         val deltaNanos = sample.timestampNanos - previousTimestampNanos
         val gap = previousPoseQuaternion != null &&
             (deltaNanos < 0L || deltaNanos > MAX_SAMPLE_GAP_NANOS)
-        val antipodal = previousPoseQuaternion?.dot(relative)?.let { it < -0.9f } == true
-        if (gap || antipodal) {
-            // Bud removal, link pause, or a pose wrap: do not report a bogus twist across it.
+        if (gap) {
+            // Bud removal or link pause: do not report a twist across the missing interval.
+            // A quaternion sign flip at the neutral antipode needs no special case: the
+            // shortest-path delta in angularVelocity() already keeps the twist continuous.
             discontinuity++
         }
         val deltaSeconds = deltaNanos / 1_000_000_000.0
         // The twist must be the delta of the reported (neutral-relative) pose, not the raw
         // body delta: AOSP right-multiplies the intrinsic twist into the reported pose.
-        val angularVelocity = if (gap || antipodal) {
+        val angularVelocity = if (gap) {
             FloatArray(3)
         } else {
             previousPoseQuaternion?.let {

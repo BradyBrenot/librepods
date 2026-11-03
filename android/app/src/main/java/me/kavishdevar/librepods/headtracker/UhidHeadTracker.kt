@@ -19,6 +19,7 @@
 package me.kavishdevar.librepods.headtracker
 
 import android.util.Log
+import me.kavishdevar.librepods.BuildConfig
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -301,14 +302,16 @@ class UhidHeadTracker(private val macAddress: String) {
         val twist = if (age > 80_000_000L) FloatArray(3) else angularVelocity
         try {
             sendInput2(encodeInputReport(rotationVector, twist, discontinuity))
-            txReports++
-            val now = System.nanoTime()
-            if (txWindowStart == 0L) txWindowStart = now
-            val elapsed = now - txWindowStart
-            if (elapsed >= 1_000_000_000L) {
-                Log.d(TAG, "tx reports/s=${txReports * 1_000_000_000L / elapsed}")
-                txReports = 0
-                txWindowStart = now
+            if (BuildConfig.DEBUG) {
+                txReports++
+                val now = System.nanoTime()
+                if (txReports == 1L) txWindowStart = now
+                val elapsed = now - txWindowStart
+                if (elapsed >= 1_000_000_000L) {
+                    Log.d(TAG, "tx reports/s=${txReports * 1_000_000_000L / elapsed}")
+                    txReports = 0
+                    txWindowStart = 0L
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "input report failed: ${e.message}")

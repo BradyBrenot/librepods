@@ -261,7 +261,9 @@ object HeadTrackerBridge {
             .tag("librepods_head_tracker")
             .processNameSuffix("head_tracker")
             .debuggable(BuildConfig.DEBUG)
-            .version(HEAD_TRACKER_SERVICE_VERSION)
+            // Keep the manual protocol bump and the app version: a release update also
+            // replaces the UserService, while debug rebuilds can force it with the constant.
+            .version(HEAD_TRACKER_SERVICE_VERSION * 1_000_000 + BuildConfig.VERSION_CODE)
         args = userServiceArgs
         pendingMac = macAddress
         binding = true
