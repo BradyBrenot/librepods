@@ -62,6 +62,7 @@ object HeadTracking {
 
     private const val CALIBRATION_SAMPLE_COUNT = 10
     private const val POSE_CALIBRATION_SAMPLE_COUNT = 25
+    private const val STILL_THRESHOLD_RAW = 5_000
     private const val ORIENTATION_OFFSET = 5500
 
     /**
@@ -97,7 +98,12 @@ object HeadTracking {
 
         val neutral = poseNeutral
         if (neutral == null) {
-            poseCalibrationSamples.add(sample.quaternion)
+            // Only calibrate while the head is still; otherwise the neutral reference is
+            // skewed by whatever motion happened during the first second.
+            val motion = sample.rotationRate.sumOf { kotlin.math.abs(it) }
+            if (motion < STILL_THRESHOLD_RAW) {
+                poseCalibrationSamples.add(sample.quaternion)
+            }
             if (poseCalibrationSamples.size >= POSE_CALIBRATION_SAMPLE_COUNT) {
                 poseNeutral = Quaternion.average(poseCalibrationSamples)
                 previousPoseQuaternion = sample.quaternion

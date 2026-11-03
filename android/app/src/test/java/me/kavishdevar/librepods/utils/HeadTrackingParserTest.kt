@@ -196,6 +196,32 @@ class HeadTrackingParserTest {
     }
 
     @Test
+    fun poseCalibrationWaitsForAStillHead() {
+        HeadTracking.reset()
+        // Noisy/moving samples must not establish the neutral reference.
+        repeat(30) { index ->
+            HeadTracking.processPacket(
+                packet(
+                    1,
+                    command(14, blob(4000, 0, 0, index * 40_000_000L, rotationRate = 20_000)),
+                ),
+            )
+        }
+        assertNull(HeadTracking.pose.value)
+
+        repeat(25) { index ->
+            HeadTracking.processPacket(
+                packet(
+                    1,
+                    command(14, blob(4000, 0, 0, index * 40_000_000L, rotationRate = 5)),
+                ),
+            )
+        }
+        assertNotNull(HeadTracking.pose.value)
+        HeadTracking.reset()
+    }
+
+    @Test
     fun headTrackingCalibratesThenEmitsPose() {
         HeadTracking.reset()
         // qx = 4000 / 32768 is a valid (non-zero) neutral attitude on the X axis.
@@ -238,6 +264,7 @@ class HeadTrackingParserTest {
         qy: Int,
         qz: Int,
         timestampNanos: Long = 1_000_000_000L,
+        rotationRate: Int = 11,
     ): ByteArray {
         val blob = sampleBlob
         blob[20] = (qx and 0xFF).toByte()
@@ -246,6 +273,12 @@ class HeadTrackingParserTest {
         blob[23] = ((qy ushr 8) and 0xFF).toByte()
         blob[24] = (qz and 0xFF).toByte()
         blob[25] = ((qz ushr 8) and 0xFF).toByte()
+        blob[26] = (rotationRate and 0xFF).toByte()
+        blob[27] = ((rotationRate ushr 8) and 0xFF).toByte()
+        blob[28] = (rotationRate and 0xFF).toByte()
+        blob[29] = ((rotationRate ushr 8) and 0xFF).toByte()
+        blob[30] = (rotationRate and 0xFF).toByte()
+        blob[31] = ((rotationRate ushr 8) and 0xFF).toByte()
         for (i in 0 until 8) {
             blob[1 + i] = ((timestampNanos ushr (8 * i)) and 0xFF).toByte()
         }

@@ -69,6 +69,9 @@ object HeadTrackerBridge {
     private var permissionListenerRegistered = false
 
     @Volatile
+    private var binderListenerRegistered = false
+
+    @Volatile
     private var loggedUnavailable = false
 
     private val connection = object : ServiceConnection {
@@ -103,6 +106,15 @@ object HeadTrackerBridge {
                     if (service == null && pendingMac != null) bind(context, mac)
                 }, 1000)
             }
+        }
+    }
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        val context = appContext
+        val mac = pendingMac
+        if (context != null && mac != null) {
+            Log.d(TAG, "Shizuku binder received, rebinding")
+            bind(context, mac)
         }
     }
 
@@ -141,6 +153,10 @@ object HeadTrackerBridge {
             if (!permissionListenerRegistered) {
                 Shizuku.addRequestPermissionResultListener(permissionListener)
                 permissionListenerRegistered = true
+            }
+            if (!binderListenerRegistered) {
+                Shizuku.addBinderReceivedListener(binderReceivedListener)
+                binderListenerRegistered = true
             }
             if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
                 if (!permissionRequested) {
