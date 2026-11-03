@@ -81,6 +81,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import me.kavishdevar.librepods.BuildConfig
 import me.kavishdevar.librepods.R
+import me.kavishdevar.librepods.headtracker.HeadPosePredictor
 import me.kavishdevar.librepods.presentation.components.AppInfoCard
 import me.kavishdevar.librepods.presentation.components.DeviceInfoCard
 import me.kavishdevar.librepods.presentation.components.StyledBottomSheet
@@ -205,12 +206,17 @@ fun AppSettingsScreen(
                 StyledSlider(
                     label = stringResource(R.string.system_spatial_audio_lead),
                     value = state.systemSpatialAudioLeadMs.toFloat(),
-                    valueRange = 0f..200f,
+                    valueRange = 0f..HeadPosePredictor.MAX_LEAD_MS.toFloat(),
                     snapPoints = listOf(0f, 30f, 60f, 90f, 120f, 150f, 180f, 200f),
+                    snapThreshold = 15f,
                     startLabel = "0 ms",
-                    endLabel = "200 ms",
+                    endLabel = "${HeadPosePredictor.MAX_LEAD_MS} ms",
                     onValueChange = { viewModel.setSystemSpatialAudioLeadMs(it.toInt()) },
                     independent = true,
+                    description = stringResource(
+                        R.string.system_spatial_audio_lead_description,
+                        state.systemSpatialAudioLeadMs,
+                    ),
                     enabled = state.systemSpatialAudioEnabled,
                 )
             }

@@ -28,10 +28,12 @@ import kotlin.math.sqrt
  * App-side pose lead for the audio output latency that AOSP's 120 ms predictor does
  * not cover.
  *
- * The platform predicts `P * exp(twist * 120 ms)`. A positive lead advances the
- * reported pose by the same intrinsic composition before it reaches the HID report:
- * `P_lead = P * exp(twist * lead)`. The angular velocity is left unchanged so the
- * platform predictor still operates on the advanced pose.
+ * AOSP's `TWIST` predictor composes `P * exp(twist * 120 ms)`; its default
+ * `LEAST_SQUARES` predictor instead extrapolates the pose history and ignores the
+ * twist. A positive lead advances the reported pose by the same intrinsic
+ * composition before it reaches the HID report:
+ * `P_lead = P * exp(twist * lead)`. The angular velocity is left unchanged; the
+ * lead is additive to either platform predictor.
  */
 object HeadPosePredictor {
     const val MAX_LEAD_MS = 200
@@ -53,7 +55,13 @@ object HeadPosePredictor {
                 (angularVelocity[2] * leadSeconds).toFloat(),
             ),
         )
-        return HeadTrackingParser.toRotationVector((pose * delta).normalized())
+        val composed = pose * delta
+        if (!composed.w.isFinite() || !composed.x.isFinite() ||
+            !composed.y.isFinite() || !composed.z.isFinite()
+        ) {
+            return rotationVector.copyOf()
+        }
+        return HeadTrackingParser.toRotationVector(composed.normalized())
     }
 
     /** Axis-angle rotation vector (radians) to a unit quaternion. */

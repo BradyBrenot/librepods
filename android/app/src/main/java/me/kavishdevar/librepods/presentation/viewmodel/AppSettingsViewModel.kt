@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import me.kavishdevar.librepods.BuildConfig
 import me.kavishdevar.librepods.billing.BillingManager
 import me.kavishdevar.librepods.data.XposedRemotePrefProvider
+import me.kavishdevar.librepods.headtracker.HeadPosePredictor
 import kotlin.math.roundToInt
 
 data class AppSettingsUiState(
@@ -147,7 +148,9 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
                 takeoverWhenRingingCall = sharedPreferences.getBoolean("takeover_when_ringing_call", false),
                 takeoverWhenMediaStart = sharedPreferences.getBoolean("takeover_when_media_start", false),
                 systemSpatialAudioEnabled = sharedPreferences.getBoolean("system_spatial_audio_enabled", false),
-                systemSpatialAudioLeadMs = sharedPreferences.getInt("system_spatial_audio_lead_ms", 0),
+                systemSpatialAudioLeadMs = sharedPreferences
+                    .getInt("system_spatial_audio_lead_ms", 0)
+                    .coerceIn(0, HeadPosePredictor.MAX_LEAD_MS),
                 conversationAwarenessVolume = sharedPreferences.getInt("conversation_awareness_volume", 43).toFloat(),
                 cameraPackageValue = sharedPreferences.getString("custom_camera_package", "") ?: "",
                 vendorIdHook = xposedRemotePref.getBoolean("vendor_id_hook", false),
@@ -215,7 +218,7 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun setSystemSpatialAudioLeadMs(leadMs: Int) {
-        val clamped = leadMs.coerceIn(0, 200)
+        val clamped = leadMs.coerceIn(0, HeadPosePredictor.MAX_LEAD_MS)
         sharedPreferences.edit { putInt("system_spatial_audio_lead_ms", clamped) }
         _uiState.update { it.copy(systemSpatialAudioLeadMs = clamped) }
     }

@@ -49,9 +49,10 @@ What the platform and published measurements say:
     across four older Android phones; the best phone overall averaged ~244 ms
     across codecs. These are old (2019-2021) and device-dependent.
     <https://soundtest.net/guides/bluetooth-audio-latency-by-codec>
-  - A 2026 earbud round-up measured head-tracking latency at ~120 ms median for
-    AirPods Pro 3, ~150 ms for Pixel Buds Pro 2, and 180-280 ms for several
-    competitors. <https://havitsmart.com/blogs/guide/best-earbuds-for-spatial-audio-2026>
+  - A 2026 vendor test (HAVIT, itself an earbud maker; treat as directional)
+    measured head-tracking latency at ~120 ms median for AirPods Pro 3, ~150 ms
+    for Pixel Buds Pro 2, and 180-280 ms for several competitors.
+    <https://havitsmart.com/blogs/guide/best-earbuds-for-spatial-audio-2026>
 - OpenTrack-style trackers use prediction/lead to compensate for output latency;
   smoothing adds latency, so prediction is preferred over filtering for
   motion-to-photon/audio response.
@@ -136,18 +137,20 @@ immersive playback starts.
 
 ### 6. Pose lead - implemented
 
-AOSP predicts 120 ms from the HID report. If the real output latency is higher,
-pre-advance the reported pose by the remainder before sending it:
+AOSP predicts 120 ms from the HID report (the default `LEAST_SQUARES` predictor
+extrapolates the pose history; the `TWIST` predictor right-multiplies the twist).
+If the real output latency is higher, pre-advance the reported pose by the
+remainder before sending it:
 
 ```text
 P_lead = P * exp(omega * lead)
 ```
 
 `P` is the neutral-relative quaternion; `omega` is the head-frame twist from
-`HeadTracking`; the multiplication order matches AOSP's intrinsic prediction.
-`HeadPosePredictor` performs the quaternion composition, and the existing
-`HeadPoseAxes` mapping is applied afterwards. The angular velocity itself is not
-changed, so the platform predictor still works from the advanced pose.
+`HeadTracking`; the multiplication order matches the `TWIST` predictor's
+intrinsic composition. `HeadPosePredictor` performs the quaternion composition,
+and the existing `HeadPoseAxes` mapping is applied afterwards. The angular
+velocity is left unchanged; the lead is additive to either platform predictor.
 
 The lead is stored as `system_spatial_audio_lead_ms` (0..200 ms, default 0) and
 is exposed as a slider in App Settings next to the system-spatial-audio toggle.
