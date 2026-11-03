@@ -366,26 +366,26 @@ The bridge needs a separately testable converter that:
   (`x^2 + y^2 + z^2 <= 1.001` for validation; loosen only if captures show more noise) and
   clamp only the square-root argument; exact `<= 1` is too strict for Q15 rounding near a
   180-degree rotation;
-- establishes the neutral reference from the first N still samples (for example 25 samples
-  at 50 Hz = 0.5 s). The quaternion direction is not yet established: if `q` is
-  head-to-world, the reference-to-head pose is `q_curr^-1 * q_ref`; if `q` is world-to-head,
-  it is `q_curr * q_ref^-1`. Do not hard-code the multiplication order until a known
-  yaw+pitch motion validates it. The FIocker decoder composes `neutral.Conjugate() * q`;
-  that is one convention, not proof that it matches Android's reference-to-head field;
+- establishes the neutral reference from the first N still samples (25 samples at 25 Hz =
+  1 s), with a 5 s fallback to the latest samples if the head never appears still. The
+  captured quaternion maps body to world, so the reported pose is the active world delta
+  `q_curr * q_ref^-1` (verified against nod / turn / tilt plateaus); do not switch this to
+  `q_ref^-1 * q_curr`, which would rotate the sound field in the wrong frame;
 - canonicalizes the relative quaternion to `w >= 0` (negate all components if `w < 0`);
 - converts it to Android's rotation-vector field with the stable form
   `n = sqrt(x^2 + y^2 + z^2); theta = 2 * atan2(n, w); r = v * (theta / n)`, returning a zero
-  vector when `n < 1e-9`. This is `0` at identity, avoids the `0/0` in
+  vector when `n < 1e-6`. This is `0` at identity, avoids the `0/0` in
   `(x,y,z)/sin(theta/2)`, and gives `theta in [0, pi]` after canonicalization. Encode each
   component as `i16 = round(r * 32767 / pi)`;
-- finds the fixed axis permutation/sign that maps the AirPods world frame to Android's frame.
-  Gravity can verify that the quaternion is a valid attitude, but it cannot detect an
-  inverted yaw/pitch mapping; add a known combined yaw+pitch (and roll) motion test and check
-  the direction the soundfield appears to move, not only that it "stays fixed";
-- derives angular velocity. Prefer the raw rotation-rate triple if its scale/frame can be
-  verified against finite differences of the quaternion; otherwise use finite differences
-  `2 * vec(q_prev^-1 * q_curr) / dt`, with smoothing. Encode with
-  `i16 = round(v * 32767 / 32)` and clamp to +/-32 rad/s;
+- maps the AirPods world axes to Android's headset frame. Measured on AirPods 4 ANC:
+  nod down = `Y+`, turn left = `Z+`, tilt right = `X+`; AOSP `quaternionToAngles` uses
+  positive pitch = up, roll = right, yaw = left. The implemented map is
+  `Android = (-AirPodsY, AirPodsX, AirPodsZ)` for both the reported pose and the twist;
+- derives angular velocity from the **reported** pose, not the raw body delta:
+  `P = q * q_ref^-1`, `omega = 2 * vec(P_prev^-1 * P_cur) / dt`. AOSP right-multiplies the
+  intrinsic twist into the reported pose, so mapping the raw `q_prev^-1 * q_curr` would be
+  wrong whenever the neutral attitude is not identity. Encode with
+  `i16 = round(v * 32767 / 32)` and clamp to +/-32 rad/s (with a 1 ms..500 ms dt window);
 - clamps rotation magnitude to pi and the angular velocity to the descriptor's range;
 - increments the discontinuity counter whenever the neutral reference changes or the stream
   restarts.

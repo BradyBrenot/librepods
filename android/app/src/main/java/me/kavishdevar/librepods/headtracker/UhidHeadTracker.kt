@@ -287,10 +287,13 @@ class UhidHeadTracker(private val macAddress: String) {
 
     private fun sendInputReport() {
         if (!running.get() || !started.get() || !reporting.get() || !powered.get()) return
-        // Do not keep replaying a stale pose if the AirPods stream paused (bud out, link loss).
-        if (lastPoseNanos == 0L || System.nanoTime() - lastPoseNanos > 250_000_000L) return
+        // Stop before AOSP's 120 ms freshness timeout, and drop the twist after one sample
+        // interval so a paused AirPods stream cannot keep predicting motion.
+        val age = System.nanoTime() - lastPoseNanos
+        if (lastPoseNanos == 0L || age > 120_000_000L) return
+        val twist = if (age > 60_000_000L) FloatArray(3) else angularVelocity
         try {
-            sendInput2(encodeInputReport(rotationVector, angularVelocity, discontinuity))
+            sendInput2(encodeInputReport(rotationVector, twist, discontinuity))
         } catch (e: Exception) {
             Log.w(TAG, "input report failed: ${e.message}")
         }

@@ -55,6 +55,9 @@ object HeadTracking {
     private var o3Neutral = 0
 
     private val poseCalibrationSamples = mutableListOf<Quaternion>()
+    private val poseFallbackSamples = mutableListOf<Quaternion>()
+    private var poseCalibrationStarted = false
+    private var poseCalibrationStartNanos = 0L
     private var poseNeutral: Quaternion? = null
     private var previousPoseQuaternion: Quaternion? = null
     private var previousTimestampNanos = 0L
@@ -62,7 +65,12 @@ object HeadTracking {
 
     private const val CALIBRATION_SAMPLE_COUNT = 10
     private const val POSE_CALIBRATION_SAMPLE_COUNT = 25
-    private const val STILL_THRESHOLD_RAW = 5_000
+    private const val POSE_CALIBRATION_TIMEOUT_NANOS = 5_000_000_000L
+    /**
+     * Sum of |rotation-rate| words. The captured AirPods 4 data is a few LSB at rest and
+     * thousands during a deliberate nod, so 2000 is a conservative "still" gate.
+     */
+    private const val STILL_THRESHOLD_RAW = 2_000
     private const val ORIENTATION_OFFSET = 5500
 
     /**
@@ -98,18 +106,44 @@ object HeadTracking {
 
         val neutral = poseNeutral
         if (neutral == null) {
-            // Only calibrate while the head is still; otherwise the neutral reference is
-            // skewed by whatever motion happened during the first second.
+            // Prefer still samples; fall back to the latest 25 if the user keeps moving so
+            // calibration can never stall forever.
+            if (!poseCalibrationStarted) {
+                poseCalibrationStarted = true
+                poseCalibrationStartNanos = sample.timestampNanos
+            }
+            poseFallbackSamples.add(sample.quaternion)
+            if (poseFallbackSamples.size > POSE_CALIBRATION_SAMPLE_COUNT) {
+                poseFallbackSamples.removeAt(0)
+            }
             val motion = sample.rotationRate.sumOf { kotlin.math.abs(it) }
             if (motion < STILL_THRESHOLD_RAW) {
                 poseCalibrationSamples.add(sample.quaternion)
             }
-            if (poseCalibrationSamples.size >= POSE_CALIBRATION_SAMPLE_COUNT) {
-                poseNeutral = Quaternion.average(poseCalibrationSamples)
-                previousPoseQuaternion = sample.quaternion
+            val timedOut =
+                sample.timestampNanos - poseCalibrationStartNanos > POSE_CALIBRATION_TIMEOUT_NANOS
+            if (poseCalibrationSamples.size >= POSE_CALIBRATION_SAMPLE_COUNT ||
+                (timedOut && poseFallbackSamples.size >= POSE_CALIBRATION_SAMPLE_COUNT)
+            ) {
+                val source = if (poseCalibrationSamples.size >= POSE_CALIBRATION_SAMPLE_COUNT) {
+                    poseCalibrationSamples
+                } else {
+                    poseFallbackSamples
+                }
+                val capturedNeutral = Quaternion.average(source)
+                poseNeutral = capturedNeutral
+                poseCalibrationSamples.clear()
+                poseFallbackSamples.clear()
+                val firstRelative =
+                    HeadTrackingParser.relativeRotation(sample.quaternion, capturedNeutral)
+                previousPoseQuaternion = firstRelative
                 previousTimestampNanos = sample.timestampNanos
                 discontinuity++
-                _pose.value = HeadPose(FloatArray(3), FloatArray(3), discontinuity)
+                _pose.value = HeadPose(
+                    rotationVector = HeadTrackingParser.toRotationVector(firstRelative),
+                    angularVelocity = FloatArray(3),
+                    discontinuity = discontinuity,
+                )
             }
             return
         }
@@ -117,11 +151,13 @@ object HeadTracking {
         val relative = HeadTrackingParser.relativeRotation(sample.quaternion, neutral)
         val deltaSeconds =
             (sample.timestampNanos - previousTimestampNanos) / 1_000_000_000.0
+        // The twist must be the delta of the reported (neutral-relative) pose, not the raw
+        // body delta: AOSP right-multiplies the intrinsic twist into the reported pose.
         val angularVelocity = previousPoseQuaternion?.let {
-            HeadTrackingParser.angularVelocity(it, sample.quaternion, deltaSeconds)
+            HeadTrackingParser.angularVelocity(it, relative, deltaSeconds)
         } ?: FloatArray(3)
 
-        previousPoseQuaternion = sample.quaternion
+        previousPoseQuaternion = relative
         previousTimestampNanos = sample.timestampNanos
         _pose.value = HeadPose(
             rotationVector = HeadTrackingParser.toRotationVector(relative),
@@ -159,6 +195,9 @@ object HeadTracking {
     @Synchronized
     fun recenter() {
         poseCalibrationSamples.clear()
+        poseFallbackSamples.clear()
+        poseCalibrationStarted = false
+        poseCalibrationStartNanos = 0L
         poseNeutral = null
         previousPoseQuaternion = null
         previousTimestampNanos = 0L
@@ -171,6 +210,9 @@ object HeadTracking {
         calibrationSamples.clear()
         isCalibrated = false
         poseCalibrationSamples.clear()
+        poseFallbackSamples.clear()
+        poseCalibrationStarted = false
+        poseCalibrationStartNanos = 0L
         poseNeutral = null
         previousPoseQuaternion = null
         previousTimestampNanos = 0L

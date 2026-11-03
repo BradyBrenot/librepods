@@ -196,6 +196,66 @@ class HeadTrackingParserTest {
     }
 
     @Test
+    fun twistMatchesTheReportedPoseWithANonIdentityNeutral() {
+        HeadTracking.reset()
+        // Neutral is a 90-degree rotation around Y. A body-frame pitch step after that
+        // neutral must produce a pose and a twist on the same (rotated) axis. Mapping only
+        // the raw body delta would put the twist 90 degrees away from the pose.
+        repeat(25) { index ->
+            HeadTracking.processPacket(
+                packet(
+                    1,
+                    command(14, blob(0, 23170, 0, index * 40_000_000L, rotationRate = 5)),
+                ),
+            )
+        }
+        assertNotNull(HeadTracking.pose.value)
+
+        HeadTracking.processPacket(
+            packet(
+                1,
+                command(14, blob(1158, 23141, -1158, 25 * 40_000_000L, rotationRate = 5)),
+            ),
+        )
+        val pose = HeadTracking.pose.value!!
+        val rv = pose.rotationVector
+        val av = pose.angularVelocity
+        val rvNorm = kotlin.math.sqrt(rv.sumOf { (it * it).toDouble() }).toFloat()
+        val avNorm = kotlin.math.sqrt(av.sumOf { (it * it).toDouble() }).toFloat()
+        assertTrue(rvNorm > 0.05f)
+        assertTrue(avNorm > 0.5f)
+        val dot = (rv[0] * av[0] + rv[1] * av[1] + rv[2] * av[2]) / (rvNorm * avNorm)
+        assertEquals(1f, dot, 1e-2f)
+        HeadTracking.reset()
+    }
+
+    @Test
+    fun poseCalibrationFallsBackAfterFiveSecondsOfMotion() {
+        HeadTracking.reset()
+        // Two distinct non-zero attitudes, alternating for 6 s of "never still" input.
+        repeat(30) { index ->
+            val (qx, qy) = if (index % 2 == 0) 0 to 23170 else 23170 to 0
+            HeadTracking.processPacket(
+                packet(
+                    1,
+                    command(
+                        14,
+                        blob(qx, qy, 0, index * 200_000_000L, rotationRate = 20_000),
+                    ),
+                ),
+            )
+        }
+        val pose = HeadTracking.pose.value
+        assertNotNull(pose)
+        val norm = kotlin.math.sqrt(
+            pose!!.rotationVector.sumOf { (it * it).toDouble() },
+        ).toFloat()
+        // The first report is the true relative pose, not a forced zero.
+        assertTrue(norm > 0.05f)
+        HeadTracking.reset()
+    }
+
+    @Test
     fun poseCalibrationWaitsForAStillHead() {
         HeadTracking.reset()
         // Noisy/moving samples must not establish the neutral reference.
