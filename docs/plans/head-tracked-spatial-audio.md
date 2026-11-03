@@ -642,6 +642,18 @@ send pose to OpenTrack. LibrePods does not target Windows in `main`. This is out
   - The faux sensor was cleaned up; `dumpsys sensorservice` no longer shows it.
   - Pending: AirPods 4 ANC A2DP route + real-MAC UUID -> `headtracker available:true`;
     Shizuku UserService route; real AAP `0x17` stream; actual spatial rendering.
+  - **AirPods 4 ANC route association:** with the AirPods connected over A2DP
+    (`44:A7:F4:08:74:0F`) and Spatial Audio + Head tracking enabled in the Bluetooth
+    device settings, the UHID sensor with the real-MAC UUID is associated:
+    `dumpsys audio` shows `HT: true HTenabled: true`, `headtracker available:true`,
+    `isSpatializerEnabled:true`, `mSpatLevel:1`; `dumpsys media.audio_policy` shows
+    `HeadSensorHandle: 0x...`.
+  - **Remaining OS-side blocker:** `SpatializerPoseController` reports
+    `HeadSensor: INVALID` / `Sensors total number 0`, and `mActualHeadTrackingMode` stays
+    `DISABLED`. The AOSP `hid` command does not auto-reply to `UHID_SET_REPORT`, so the
+    dynamic-sensor HAL's `enable()` blocks while setting report 1 (reporting state / power /
+    interval). The next step is a standalone UHID helper with a complete feature-report
+    state machine, then the same helper inside a Shizuku UserService.
 
 ### 6.6 CI
 
