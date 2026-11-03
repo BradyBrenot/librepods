@@ -20,10 +20,12 @@ For Android the situation is:
 - Android's system spatializer (the effect behind Dolby/immersive head tracking) reads head
   pose only from a `Sensor.TYPE_HEAD_TRACKER` dynamic sensor. A normal app cannot register
   such a sensor or push pose into it.
-- A rooted bridge can create a virtual HID head tracker through `/dev/uhid`. The kernel
-  exposes it as `hidraw`; the Android dynamic-sensor HAL turns it into `TYPE_HEAD_TRACKER`;
-  `SpatializerHelper` associates it with the current A2DP device by Bluetooth MAC; the
-  system spatializer then consumes the pose for content that the OEM effect spatializes.
+- A privileged shell-UID bridge can create a virtual HID head tracker through `/dev/uhid`.
+  That can be full root, or Shizuku in ADB/shell mode if the process can open `/dev/uhid`
+  (AOSP's shell domain is allowed to do this). The kernel exposes it as `hidraw`; the Android
+  dynamic-sensor HAL turns it into `TYPE_HEAD_TRACKER`; `SpatializerHelper` associates it with
+  the current A2DP device by Bluetooth MAC; the system spatializer then consumes the pose for
+  content that the OEM effect spatializes.
 
 One important content caveat: AOSP's spatial-audio guidelines say stereo content must not be
 rendered through the spatializer effect. Head-tracked spatialization normally applies to
@@ -36,12 +38,14 @@ So the work is split into two very different problems:
 1. **Get a correct 3D pose out of the AirPods** (parsing and coordinate conversion). This is
    feasible and mostly a matter of fixing the current parser and validating the AirPods 4
    axes.
-2. **Deliver that pose to the OS** (system integration). On Android this requires root, an
-   OEM dynamic-sensor HAL, and an OEM spatializer effect that actually supports head
-   tracking. On Linux there is no OS-level head-tracker API at all; the realistic route is
-   a user-space PipeWire spatializer, not an OS feature.
+2. **Deliver that pose to the OS** (system integration). On Android this requires privileged
+   access to `/dev/uhid` (root, or Shizuku/shell mode), an OEM dynamic-sensor HAL, and an OEM
+   spatializer effect that actually supports head tracking. On Linux there is no OS-level
+   head-tracker API at all; the realistic route is a user-space PipeWire spatializer, not an
+   OS feature.
 
-The recommended first step is a short device spike on one rooted Android phone, not a full
+The recommended first step is a short device spike on one rooted or Shizuku-enabled Android
+phone, not a full
 implementation: prove that a dummy UHID head tracker becomes `TYPE_HEAD_TRACKER` and makes
 `Spatializer.isHeadTrackerAvailable()` true, then prove that AirPods 4 ANC produces a valid
 Q15 quaternion at >= 50 Hz. If either gate fails, the system-wide route is not viable on that
@@ -257,9 +261,10 @@ feature should say so in the UI rather than implying that all audio rotates.
 
 ### 4.2 Delivery mechanism: `/dev/uhid`
 
-A rooted helper creates a virtual HID device through `/dev/uhid`:
+A privileged helper creates a virtual HID device through `/dev/uhid`. The helper can be a
+root process or a Shizuku UserService running as shell (see the next subsection):
 
-1. Open `/dev/uhid` (root).
+1. Open `/dev/uhid` (root or shell UID; see the Shizuku subsection).
 2. Write one complete `UHID_CREATE2` event with the AOSP report descriptor, `BUS_BLUETOOTH`
    identity, and a name such as "LibrePods Head Tracker".
 3. Read kernel events continuously. Reply to every `UHID_GET_REPORT` and
@@ -296,6 +301,47 @@ headset sends pose only while the user has Head tracking enabled, and it makes t
 rule enforceable. The helper should forward the requested Report Interval to the app; request
 the AirPods interval at or below the host interval (for example host 20 ms -> AirPods 20 ms;
 host 10 ms -> AirPods 10 ms), and downsample in the helper if needed.
+
+#### Root vs Shizuku (shell UID)
+
+Full root is the simplest and most reliable route, but it is not the only one. AOSP gives the
+`shell` domain access to `/dev/uhid`:
+
+- `/dev/uhid` is `0660 uhid:uhid` in `system/core/rootdir/ueventd.rc`.
+- `system/sepolicy/private/shell.te` contains
+  `allow shell uhid_device:chr_file rw_file_perms;`.
+- `packages/modules/adb/daemon/main.cpp` adds `AID_UHID` to the shell process's
+  supplementary groups.
+- AOSP's `hid` command (`frameworks/base/cmds/hid`) uses `/dev/uhid` from shell, supports
+  `"bus": "bluetooth"`, input reports, feature reports, and GET/SET report replies.
+
+Shizuku in ADB/wireless-debugging mode runs its server and UserServices as UID 2000
+(`shell`), so a Shizuku UserService can host the UHID helper natively. This may avoid full
+root. Caveats:
+
+- Shizuku must be started via ADB/wireless debugging, not in root mode (root mode is root
+  anyway). It must be restarted after reboot.
+- The UserService must inherit the `uhid` group and run in `u:r:shell:s0`. This is expected
+  from the Shizuku server started by `adbd`, but must be verified on the target OEM.
+- The OEM may restrict shell access to `uhid_device`, remove `hid`, or ship a different
+  `/dev/uhid` permission. Check `id`, `ls -l /dev/uhid`, `exec 3<>/dev/uhid` via `rish` or a
+  Shizuku shell, and `logcat | grep avc`.
+- The app cannot grant `MODIFY_DEFAULT_AUDIO_EFFECTS` through Shizuku (it is
+  `signature|privileged`). The user must enable Spatial Audio / Head tracking in Bluetooth
+  settings, or the app must be installed as the existing privileged system app.
+- The dynamic-sensor HAL and OEM spatializer requirements are unchanged. Shizuku cannot add
+  them.
+
+A quick proof-of-concept can use the AOSP `hid` command through Shizuku/rish: register a
+Bluetooth-bus HID device with the head-tracker descriptor, supply report 2 in
+`feature_reports`, answer GET/SET requests, and send report 1. `hid` does **not** auto-reply
+to `UHID_SET_REPORT`: the driver script must read the `eventId: 13` output and send
+`{"id":<deviceId>,"command":"send_set_report_reply","success":true}` (and update its stored
+report 1 with `set_get_report_response`). Drive `hid -` bidirectionally; a static input file
+cannot answer
+SET_REPORT, and the kernel/HAL will block waiting for the reply. If `hid` is absent, a custom
+Shizuku UserService with native code is the robust route. If `/dev/uhid` cannot be opened by
+shell on the target device, fall back to full root.
 
 ### 4.3 Pose conversion
 
@@ -347,10 +393,18 @@ Proposed components:
   timestamps, validation, zero-attitude skip.
 - `PoseConverter`: Q15 quaternion, neutral calibration, axis mapping, angular velocity,
   clamping, discontinuity.
-- `UhidHeadTracker` helper: a small native executable launched with `su`. The app writes
-  fixed-size pose frames to its stdin; the helper writes UHID input reports. The helper exits
-  when stdin closes. A Magisk-module daemon is a later hardening option if `su` lifetime
-  proves unreliable.
+- `UhidHeadTracker` helper: a small native executable launched with `su`, or hosted in a
+  Shizuku UserService running as shell. The app sends fixed-size pose frames to it; the
+  helper writes UHID input reports. The helper exits when the app/stream stops. For the
+  root route the transport can be the helper's stdin; for the Shizuku UserService route it
+  must be Binder/AIDL (or a local socket), not a child-process pipe. A Magisk-module daemon
+  is a later hardening option if `su` lifetime proves unreliable.
+  - UserService native-library caveat: a Shizuku UserService is `app_process` with the
+    Shizuku manager APK on the classpath, so `System.loadLibrary` will not find the LibrePods
+    APK's JNI libraries by default. Either extract the UHID helper `.so` to
+    `/data/local/tmp` and `System.load` it by absolute path, or implement the UHID event
+    loop in Java/`ByteBuffer` code. Verify this in the Shizuku spike before designing the
+    transport.
   - Packaging caveat: with modern AGP the merged manifest normally sets
     `android:extractNativeLibs="false"`, so a `.so` in `nativeLibraryDir` may not exist as a
     file. The FOSS flavor must either set
@@ -371,9 +425,9 @@ Proposed components:
 Start sequence (host-driven):
 
 1. AirPods connected and routed over A2DP.
-2. Start the root helper with the AirPods MAC. It creates the UHID device and waits for the
-   host's feature report 1. The host discovers the sensor once the per-device Head tracking
-   setting is enabled.
+2. Start the privileged helper (root, or a Shizuku UserService) with the AirPods MAC. It
+   creates the UHID device and waits for the host's feature report 1. The host discovers the
+   sensor once the per-device Head tracking setting is enabled.
 3. If ownership turns out to be required for the motion stream on the target device, take it
    here, before requesting streams. Do not force it by default; it is not proven necessary.
 4. On the first feature report with Reporting State = All Events, Power State = Full Power
@@ -418,7 +472,9 @@ Status/UX requirements:
 All of these are required for the system route:
 
 - Android 13 or newer (the app already has `minSdk 33`).
-- Root that can open `/dev/uhid` and keep a helper process alive.
+- Root, or Shizuku in ADB/shell mode, that can open `/dev/uhid` and keep a helper process
+  alive. AOSP's `shell` domain has `uhid_device` access and adbd adds `AID_UHID`, but OEM
+  policy may deny it; test before committing to the Shizuku route.
 - `CONFIG_UHID=y` (the `/dev/uhid` node exists) and `CONFIG_HIDRAW=y`.
 - `sensors.dynamic_sensor_hal.so` enabled in the OEM sensor HAL configuration, with
   `hidraw_device` SELinux access.
@@ -537,6 +593,10 @@ send pose to OpenTrack. LibrePods does not target Windows in `main`. This is out
   below the 120 ms stale threshold.
 - Verify `UHID_DESTROY` removes the sensor and is idempotent.
 - Test the `BUS_BLUETOOTH` identity and, if needed, `BUS_VIRTUAL` fallback.
+- If using the AOSP `hid` command as a Shizuku/shell PoC, drive `hid -` interactively:
+  provide report 2 in `feature_reports`, answer every SET_REPORT with
+  `send_set_report_reply` (and update report 1 with `set_get_report_response`), and send
+  report 1 input reports. A static input file cannot answer SET_REPORT.
 - Test helper crash/app death: the sensor disappears, and the app can restart it cleanly.
 
 ### 6.4 Android integration test
@@ -603,9 +663,9 @@ for a basic system-wide sink; production quality is longer. Windows is out of sc
    content through the system effect. If the target phone has no stereo upmix/spatialization
    toggle, head tracking will only affect multichannel/Atmos content, not ordinary music.
    This may invalidate the feature for the user's main use case.
-3. **OEM spatializer support is the hard blocker.** Root + UHID only works if the phone's
-   dynamic-sensor HAL and spatializer effect support head tracking. Many phones will not.
-   There is no generic software fallback for system-wide audio.
+3. **OEM spatializer support is the hard blocker.** Privileged `/dev/uhid` access + UHID
+   only works if the phone's dynamic-sensor HAL and spatializer effect support head tracking.
+   Many phones will not. There is no generic software fallback for system-wide audio.
 4. **A2DP latency.** AOSP's head-tracking latency target is < 150 ms. In the LibrePods route
    the AirPods are on A2DP (AAC/SBC), not low-latency LE Audio/Opus. The spatializer predicts
    120 ms by default, but AirPods latency may still exceed the budget. This must be measured;
@@ -615,30 +675,33 @@ for a basic system-wide sink; production quality is longer. Windows is out of sc
 5. **AirPods 4 axis/scale unknowns.** The Q15 quaternion decoding is validated on AirPods Max
    2, not AirPods 4. Rotation-rate units and axes are not verified on any model. The
    converter must be validated with gravity and known motions, including direction.
-6. **Root helper lifecycle, packaging and SELinux.** `/dev/uhid`/`CONFIG_UHID` availability,
-   `CONFIG_HIDRAW`, the dynamic-sensor HAL, SELinux `hidraw_device` access, executing a
-   helper from `nativeLibraryDir` (which may not contain an extracted file), and keeping it
-   alive across app/service restarts all need device testing. A Magisk-module daemon may be
-   needed for reliability.
+6. **Privileged helper lifecycle, packaging and SELinux.** `/dev/uhid`/`CONFIG_UHID`
+   availability, `CONFIG_HIDRAW`, the dynamic-sensor HAL, SELinux `hidraw_device` access,
+   executing a helper from `nativeLibraryDir` (which may not contain an extracted file), and
+   keeping it alive across app/service restarts all need device testing. A Magisk-module
+   daemon may be needed for reliability. If Shizuku is the chosen route, its UserService must
+   inherit shell UID, `u:r:shell:s0`, and the `AID_UHID` group; OEM SELinux may deny shell
+   access to `/dev/uhid`, in which case full root is required.
 7. **Ownership/multipoint conflicts.** Taking ownership and streaming continuously may
    conflict with multipoint, calls, or other devices. The bridge must stop cleanly and
    restore state. Do not force takeover until it is proven necessary.
-8. **Battery and thermals.** Continuous 50-100 Hz sensor streaming plus a root helper has a
-   cost. Only run when the host requests pose (reporting state All Events) and spatial audio
-   is enabled.
+8. **Battery and thermals.** Continuous 50-100 Hz sensor streaming plus a privileged helper
+   has a cost. Only run when the host requests pose (reporting state All Events) and spatial
+   audio is enabled.
 9. **Privacy.** The persistent UUID exposes the AirPods BR/EDR MAC to any app that can read
    `Sensor.getUuid()`. This is inherent to the AOSP association scheme; document it.
-10. **Small audience.** If root + OEM support + stereo-upmix support are all required, the
-    set of compatible phones may be very small. Validate the target device before investing
-    in the full implementation.
-11. **Play Store policy.** The system route is root-only and should remain in the FOSS build,
-    consistent with the existing root module.
+10. **Small audience.** If root/shell access + OEM support + stereo-upmix support are all
+    required, the set of compatible phones may be very small. Validate the target device
+    before investing in the full implementation.
+11. **Play Store policy.** The system route requires privileged access (root or Shizuku shell
+    mode) and should remain in the FOSS build, consistent with the existing root module.
 
 ### Open questions for the user
 
 - Which OS/device is the target: Android (which phone, OEM, Android version), Linux, or
   Windows?
-- Is root acceptable? Is a Magisk module acceptable, or must the helper run via `su`?
+- Is root acceptable? Is a Magisk module acceptable, or is Shizuku in ADB/shell mode enough?
+  (Shizuku may avoid root if the target OEM allows shell access to `/dev/uhid`.)
 - Is system-wide audio required, or is app-scoped spatial audio acceptable?
 - What is the AirPods 4 ANC model/firmware, and is the phone's OEM spatializer known to
   support head tracking with third-party devices?
@@ -647,26 +710,32 @@ for a basic system-wide sink; production quality is longer. Windows is out of sc
 
 ## 9. Recommendation
 
-- **If the target is Android and root is acceptable:** run the three gate spikes first:
-  (a) dummy UHID sensor on the target phone becomes `TYPE_HEAD_TRACKER` and
+- **If the target is Android and root or Shizuku shell access is acceptable:** run the gate
+  spikes first: (a) a dummy UHID sensor on the target phone becomes `TYPE_HEAD_TRACKER` and
   `isHeadTrackerAvailable()` becomes true; (b) the OEM effect spatializes 5.1/Atmos content
   and, if needed, stereo; (c) AirPods 4 ANC produces a valid Q15 quaternion at >= 50 Hz with
-  verified axes. Only then implement the parser/converter and UHID helper in the FOSS build,
-  behind a clearly labelled "System head tracking (root, experimental)" setting.
+  verified axes; (d) decide root vs Shizuku by testing whether the chosen helper can open
+  `/dev/uhid` on the target OEM build. Only then implement the parser/converter and UHID
+  helper in the FOSS build, behind a clearly labelled "System head tracking (privileged,
+  experimental)" setting.
+- **If root is unacceptable but Shizuku is acceptable:** first run the shell-UID UHID smoke
+  test. If it passes, implement the helper as a Shizuku UserService; if the OEM denies
+  `uhid_device` to shell, the route requires full root.
 - **If stereo music is the main goal and the target OEM does not spatialize stereo:** the
   Android system route cannot deliver it without an OEM upmix toggle. Consider the Linux
   PipeWire route or an app-scoped renderer instead; do not over-promise.
-- **If root or OEM support is unavailable:** do not promise system-wide spatial audio. The
-  only fallback is app-scoped HRTF, which the project has already excluded, or a per-app
-  OpenTrack-style bridge on Linux/Windows.
+- **If neither root nor shell-UID `/dev/uhid` access is available, or OEM support is
+  unavailable:** do not promise system-wide spatial audio. The only fallback is app-scoped
+  HRTF, which the project has already excluded, or a per-app OpenTrack-style bridge on
+  Linux/Windows.
 - **If the target is Linux:** treat this as a PipeWire/OpenTrack userspace feature, not an
   OS integration, and scope it separately.
 
 ## 10. References
 
 - LibrePods `docs/AAP Definitions.md`, Head Tracking section (lines 378-405).
-- LibrePods PR #722, `docs/android-head-tracker-hid.md` (draft): rooted Android
-  head-tracker bridge contract.
+- LibrePods PR #722, `docs/android-head-tracker-hid.md` (draft): Android head-tracker bridge
+  contract (rooted route).
 - LibrePods issue #719: head-tracked spatial audio, no-root and root routes.
 - LibrePods PR #887 (closed): measured 0x17 request format, streams, sample rate and 58-byte
   layout; docs were closed because the repo docs are not maintained, but the measurements
@@ -690,6 +759,12 @@ for a basic system-wide sink; production quality is longer. Windows is out of sc
   requirements, `hidraw`, SELinux.
 - AOSP `hardware/libhardware/modules/sensors/dynamic_sensor/HidRawSensor.cpp`: head-tracker
   detection, `useUniqueIdForUuid`, report parsing.
+- AOSP `system/core/rootdir/ueventd.rc`, `system/sepolicy/private/shell.te`, and
+  `packages/modules/adb/daemon/main.cpp`: `/dev/uhid` permissions and shell-domain
+  `uhid_device`/`AID_UHID` access.
+- AOSP `frameworks/base/cmds/hid`: shell `hid` command, Bluetooth-bus UHID registration,
+  input/feature reports and GET/SET report replies. Useful for a Shizuku/shell proof of
+  concept if the command exists on the target build.
 - AOSP `source.android.com/docs/core/audio/implement-spatial-audio`: A2DP/LE Audio,
   150 ms latency target, 20 ms report period, 40 ms maximum gap, and the stereo-content
   restriction.
