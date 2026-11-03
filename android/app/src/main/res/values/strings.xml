@@ -153,6 +153,7 @@
     <string name="advanced_options">Advanced Options</string>
     <string name="system_spatial_audio">System spatial audio (Shizuku)</string>
     <string name="system_spatial_audio_description">Send AirPods head tracking to Android\'s spatializer through a Shizuku user service. Requires Shizuku running in ADB/root mode and immersive or multichannel playback; ordinary stereo music is usually not spatialized.</string>
+    <string name="system_spatial_audio_lead">Latency compensation</string>
     <string name="set_identity_resolving_key">Set Identity Resolving Key (IRK)</string>
     <string name="set_identity_resolving_key_description">Manually set the IRK value used for resolving BLE random addresses</string>
     <string name="set_encryption_key">Set Encryption Key</string>

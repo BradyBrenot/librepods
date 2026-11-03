@@ -62,6 +62,9 @@ object HeadTrackerBridge {
     private var trackerStarted = false
 
     @Volatile
+    private var leadMs = 0
+
+    @Volatile
     private var appContext: Context? = null
 
     @Volatile
@@ -211,14 +214,23 @@ object HeadTrackerBridge {
     fun updatePose(pose: HeadPose) {
         if (!trackerStarted) return
         try {
+            val advanced = HeadPosePredictor.advance(
+                pose.rotationVector,
+                pose.angularVelocity,
+                leadMs,
+            )
             service?.updatePose(
-                HeadPoseAxes.map(pose.rotationVector),
+                HeadPoseAxes.map(advanced),
                 HeadPoseAxes.map(pose.angularVelocity),
                 pose.discontinuity,
             )
         } catch (e: Exception) {
             Log.w(TAG, "updatePose failed: ${e.message}")
         }
+    }
+
+    fun setLeadMs(ms: Int) {
+        leadMs = ms.coerceIn(0, HeadPosePredictor.MAX_LEAD_MS)
     }
 
     fun stop() {

@@ -1533,6 +1533,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             }
             "system_spatial_audio_enabled" -> {
                 if (!BuildConfig.PLAY_BUILD && preferences.getBoolean(key, false)) {
+                    HeadTrackerBridge.setLeadMs(
+                        preferences.getInt("system_spatial_audio_lead_ms", 0),
+                    )
                     if (isHeadTrackingActive && macAddress.isNotBlank()) {
                         HeadTrackerBridge.ensureStarted(this, macAddress)
                     }
@@ -1543,6 +1546,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                     HeadTrackerBridge.stop()
                     if (isHeadTrackingActive) stopHeadTracking()
                 }
+            }
+            "system_spatial_audio_lead_ms" -> {
+                HeadTrackerBridge.setLeadMs(preferences.getInt(key, 0))
             }
             "automatic_ear_detection" -> config.earDetectionEnabled =
                 preferences.getBoolean(key, true)
@@ -3310,6 +3316,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             if (mac.isNotBlank() &&
                 sharedPreferences.getBoolean("system_spatial_audio_enabled", false)
             ) {
+                HeadTrackerBridge.setLeadMs(
+                    sharedPreferences.getInt("system_spatial_audio_lead_ms", 0),
+                )
                 HeadTrackerBridge.ensureStarted(this, mac)
             }
         }

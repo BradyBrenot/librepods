@@ -202,6 +202,17 @@ fun AppSettingsScreen(
                     checked = state.systemSpatialAudioEnabled,
                     onCheckedChange = viewModel::setSystemSpatialAudioEnabled,
                 )
+                StyledSlider(
+                    label = stringResource(R.string.system_spatial_audio_lead),
+                    value = state.systemSpatialAudioLeadMs.toFloat(),
+                    valueRange = 0f..200f,
+                    snapPoints = listOf(0f, 30f, 60f, 90f, 120f, 150f, 180f, 200f),
+                    startLabel = "0 ms",
+                    endLabel = "200 ms",
+                    onValueChange = { viewModel.setSystemSpatialAudioLeadMs(it.toInt()) },
+                    independent = true,
+                    enabled = state.systemSpatialAudioEnabled,
+                )
             }
 
             StyledToggle(
