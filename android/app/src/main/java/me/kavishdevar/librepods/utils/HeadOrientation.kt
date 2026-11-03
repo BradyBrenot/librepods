@@ -30,7 +30,7 @@ data class Acceleration(val vertical: Float = 0f, val horizontal: Float = 0f)
  *
  * [rotationVector] is an axis * angle rotation vector in radians (magnitude <= pi),
  * [angularVelocity] is in radians/second, and [discontinuity] increments whenever the
- * reference frame is reset.
+ * reference frame is reset or a >200 ms sample gap is skipped.
  */
 data class HeadPose(
     val rotationVector: FloatArray,

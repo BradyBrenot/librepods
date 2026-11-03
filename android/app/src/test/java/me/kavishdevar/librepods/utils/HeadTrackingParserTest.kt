@@ -280,6 +280,57 @@ class HeadTrackingParserTest {
         val pose = HeadTracking.pose.value!!
         assertTrue(pose.discontinuity > before)
         assertArrayEquals(FloatArray(3), pose.angularVelocity, 0f)
+
+        // The post-gap sample becomes the new previous; the next normal sample must not
+        // compute its twist against the pre-gap attitude.
+        val gapDiscontinuity = pose.discontinuity
+        HeadTracking.processPacket(
+            packet(
+                1,
+                command(
+                    14,
+                    blob(9500, 0, 0, 25 * 40_000_000L + 280_000_000L, rotationRate = 5),
+                ),
+            ),
+        )
+        val next = HeadTracking.pose.value!!
+        assertEquals(gapDiscontinuity, next.discontinuity)
+        val nextAv = kotlin.math.sqrt(next.angularVelocity.sumOf { (it * it).toDouble() })
+        assertTrue(nextAv > 0.01)
+        HeadTracking.reset()
+    }
+
+    @Test
+    fun antipodeWrapKeepsTwistContinuous() {
+        HeadTracking.reset()
+        repeat(25) { index ->
+            HeadTracking.processPacket(
+                packet(
+                    1,
+                    command(14, blob(4000, 0, 0, index * 40_000_000L, rotationRate = 5)),
+                ),
+            )
+        }
+        val before = HeadTracking.pose.value!!.discontinuity
+        HeadTracking.processPacket(
+            packet(
+                1,
+                command(14, blob(32766, 0, 0, 25 * 40_000_000L, rotationRate = 5)),
+            ),
+        )
+        HeadTracking.processPacket(
+            packet(
+                1,
+                command(
+                    14,
+                    blob(-32766, 0, 0, 25 * 40_000_000L + 40_000_000L, rotationRate = 5),
+                ),
+            ),
+        )
+        val pose = HeadTracking.pose.value!!
+        assertEquals(before, pose.discontinuity)
+        val avNorm = kotlin.math.sqrt(pose.angularVelocity.sumOf { (it * it).toDouble() })
+        assertTrue(avNorm > 0.1)
         HeadTracking.reset()
     }
 

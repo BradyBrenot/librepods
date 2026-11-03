@@ -43,8 +43,9 @@ object HeadTrackerBridge {
 
     /**
      * Bump this whenever HeadTrackerUserService/UhidHeadTracker changes: Shizuku reuses a
-     * running UserService with the same version, so debug rebuilds would otherwise keep the
-     * old code. The app version code is not enough because debug builds share it.
+     * running UserService with the same version. The app version code is combined into the
+     * final version, but debug builds share it, so a manual bump is still required when
+     * testing service-code changes.
      */
     private const val HEAD_TRACKER_SERVICE_VERSION = 2
 
@@ -263,7 +264,12 @@ object HeadTrackerBridge {
             .debuggable(BuildConfig.DEBUG)
             // Keep the manual protocol bump and the app version: a release update also
             // replaces the UserService, while debug rebuilds can force it with the constant.
-            .version(HEAD_TRACKER_SERVICE_VERSION * 1_000_000 + BuildConfig.VERSION_CODE)
+            // Use the low 7 digits of the app version so the protocol stride cannot alias a
+            // minor-version bump.
+            .version(
+                HEAD_TRACKER_SERVICE_VERSION * 10_000_000 +
+                    (BuildConfig.VERSION_CODE % 10_000_000),
+            )
         args = userServiceArgs
         pendingMac = macAddress
         binding = true
