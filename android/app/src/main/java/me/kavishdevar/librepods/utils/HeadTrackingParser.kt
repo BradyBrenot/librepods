@@ -300,8 +300,8 @@ object HeadTrackingParser {
         deltaSeconds: Double,
     ): FloatArray {
         if (deltaSeconds < 1e-3 || deltaSeconds > 0.5) return FloatArray(3)
-        // World-frame delta, matching the rotation vector's frame.
-        var delta = current * previous.conjugate()
+        // The HID/AOSP twist is intrinsic to the head frame, not the world frame.
+        var delta = previous.conjugate() * current
         if (delta.w < 0f) delta = delta.negated()
         val sinHalf = sqrt((delta.x * delta.x + delta.y * delta.y + delta.z * delta.z).toDouble())
         if (sinHalf < 1e-6) return FloatArray(3)

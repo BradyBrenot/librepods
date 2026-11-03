@@ -204,8 +204,8 @@ object HeadTrackerBridge {
         if (!trackerStarted) return
         try {
             service?.updatePose(
-                pose.rotationVector,
-                pose.angularVelocity,
+                HeadPoseAxes.map(pose.rotationVector),
+                HeadPoseAxes.map(pose.angularVelocity),
                 pose.discontinuity,
             )
         } catch (e: Exception) {

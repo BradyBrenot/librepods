@@ -145,11 +145,11 @@ class HeadTrackingParserTest {
     }
 
     @Test
-    fun angularVelocityUsesWorldFrame() {
-        // Previous orientation is rotated around Y; the next step is a world-frame pitch
-        // around X. The resulting angular velocity must be pure X, not a body-frame mix.
+    fun angularVelocityUsesHeadFrame() {
+        // The HID twist is intrinsic: a body-frame pitch after an arbitrary previous
+        // orientation must stay a pure X rotation in the head frame.
         val previous = Quaternion(cos(0.3f), 0f, sin(0.3f), 0f).normalized()
-        val current = Quaternion(cos(0.05f), sin(0.05f), 0f, 0f) * previous
+        val current = previous * Quaternion(cos(0.05f), sin(0.05f), 0f, 0f)
         val omega = HeadTrackingParser.angularVelocity(previous, current, 0.1)
         assertArrayEquals(floatArrayOf(1f, 0f, 0f), omega, 1e-3f)
     }

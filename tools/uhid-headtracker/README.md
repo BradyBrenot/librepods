@@ -83,9 +83,10 @@ Helper options: `<BT-MAC>` (required; becomes the persistent UUID),
 `--axis x|y|z` for the synthetic pose test (default: x).
 
 Axis check (synthetic pose + 5.1 probe): `--axis x` moves the pose controller's
-`d_pitch`, `--axis y` moves `d_roll`, and `--axis z` moves `d_yaw`. This confirms
-Android's rotation-vector frame is X=pitch, Y=roll, Z=yaw, so a world-frame
-quaternion delta should map directly (sign still needs a real nod/shake check).
+`d_pitch`, `--axis y` moves `d_roll`, and `--axis z` moves `d_yaw` (43-44 samples/s).
+For the real AirPods 4, controlled nod / turn / tilt plateaus gave AirPods
+`Y+` for nod down, `Z+` for turn left and `X+` for tilt right; the app maps this
+to Android `(-Y, X, Z)` (AOSP positive pitch = up, roll = right, yaw = left).
 
 The 5.1 probe, which the acceptance checks need:
 

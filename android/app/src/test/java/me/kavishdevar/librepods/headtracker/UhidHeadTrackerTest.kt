@@ -8,6 +8,18 @@ import kotlin.math.PI
 class UhidHeadTrackerTest {
 
     @Test
+    fun airPodsAxesAreMappedToAndroidPitchRollYaw() {
+        // Measured AirPods 4 axes: X = roll (right +), Y = pitch (down +), Z = yaw (left +).
+        // Android expects X = pitch (up +), Y = roll (right +), Z = yaw (left +).
+        assertArrayEquals(
+            floatArrayOf(-2f, 1f, 3f),
+            HeadPoseAxes.map(floatArrayOf(1f, 2f, 3f)),
+            0f,
+        )
+        assertArrayEquals(FloatArray(3), HeadPoseAxes.map(FloatArray(1)), 0f)
+    }
+
+    @Test
     fun bluetoothUuidUsesDisplayOrderMac() {
         val uuid = UhidHeadTracker.bluetoothUuidForMac("AA:BB:CC:DD:EE:FF")
         assertArrayEquals(

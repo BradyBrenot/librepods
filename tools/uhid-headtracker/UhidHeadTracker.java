@@ -104,6 +104,7 @@ public final class UhidHeadTracker {
     // ---------------------------------------------------------------- entry point
 
     private static int poseAxis = 0;
+    private static boolean holdPose = false;
 
     public static void main(String[] args) {
         String mac = null;
@@ -123,6 +124,8 @@ public final class UhidHeadTracker {
                 reportId = true;
             } else if ("--rate".equals(a) && i + 1 < args.length) {
                 rateHz = Integer.parseInt(args[++i]);
+            } else if ("--hold".equals(a)) {
+                holdPose = true;
             } else if ("--axis".equals(a) && i + 1 < args.length) {
                 String axis = args[++i].toLowerCase(Locale.US);
                 if ("x".equals(axis)) {
@@ -180,6 +183,7 @@ public final class UhidHeadTracker {
         System.out.println("  --no-report-id   omit the report ID as the first feature-report byte");
         System.out.println("  --rate HZ        input report rate, default 50");
         System.out.println("  --axis x|y|z     synthetic rotation axis for the pose test (default: x)");
+        System.out.println("  --hold           hold +0.2 rad instead of alternating +/-0.05 (sign check)");
         System.out.flush();
     }
 
@@ -308,8 +312,11 @@ public final class UhidHeadTracker {
                 continue;
             }
 
-            // Alternate +/-0.05 rad around X every 500 ms so the value is visibly non-static.
-            double angle = ((counter / (rateHz / 2)) % 2 == 0) ? 0.05 : -0.05;
+            // Alternate +/-0.05 rad around the selected axis, or start at zero and step to
+            // +0.2 rad after two seconds for a sign check.
+            double angle = holdPose
+                    ? (sentReports < rateHz * 2L ? 0.0 : 0.2)
+                    : (((counter / (rateHz / 2)) % 2 == 0) ? 0.05 : -0.05);
             if (angle > maxRad) {
                 angle = maxRad;
             }

@@ -705,14 +705,17 @@ send pose to OpenTrack. LibrePods does not target Windows in `main`. This is out
     This is still driven by the setting rather than a full reference-counted stream arbiter.
   - **Android rotation-vector axes:** the synthetic helper with `--axis x` moves the pose
     controller's `d_pitch`, `--axis y` moves `d_roll`, and `--axis z` moves `d_yaw` (43-44
-    samples/s). The app's `HeadTracking.pose` is a world-frame quaternion delta (`q *
-    neutral^-1`), so a nod/shake should map directly to X/Z; the remaining sign check needs
-    real head motion.
-  - **Still pending:** sign/axis confirmation with a real nod/shake; audible HRTF/effect
-    output; host-driven gating of the AirPods `0x17` stream (the app currently streams while
-    the setting is on even if the OS has not activated the sensor); minified-release
-    on-device binding; Shizuku restart recovery; Oppo Find X9 and Logitech G Cloud
-    validation.
+    samples/s).
+  - **AirPods 4 axis mapping measured with controlled head plateaus:** nod down moves the
+    world-frame quaternion delta `Y+`, turn left moves `Z+`, and tilt right moves `X+`.
+    AOSP's `quaternionToAngles` defines positive pitch as looking up (`pitch =
+    asin(nose.Z)`), positive roll as tilting right, and positive yaw as looking left.
+    `HeadPoseAxes` therefore sends `(-Y, X, Z)` to the UHID report. The system
+    `d_pitch`/`d_yaw` signs during the same motion are consistent with this mapping.
+  - **Still pending:** audible HRTF/effect output; host-driven gating of the AirPods `0x17`
+    stream (the app currently streams while the setting is on even if the OS has not
+    activated the sensor); minified-release on-device binding; Shizuku restart recovery;
+    Oppo Find X9 and Logitech G Cloud validation.
 
 ### 6.6 CI
 
