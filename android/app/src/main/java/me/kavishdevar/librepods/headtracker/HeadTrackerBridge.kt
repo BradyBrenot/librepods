@@ -262,13 +262,13 @@ object HeadTrackerBridge {
             .tag("librepods_head_tracker")
             .processNameSuffix("head_tracker")
             .debuggable(BuildConfig.DEBUG)
-            // Keep the manual protocol bump and the app version: a release update also
-            // replaces the UserService, while debug rebuilds can force it with the constant.
-            // Use the low 7 digits of the app version so the protocol stride cannot alias a
-            // minor-version bump.
+            // Pack the manual protocol version in the high nibble and the app version in the
+            // low 28 bits. This cannot alias a normal version-code bump and lets a debug
+            // rebuild force a new UserService by incrementing the constant. The version code
+            // must stay below 2^28 (~268M), which is far above the current scheme.
             .version(
-                HEAD_TRACKER_SERVICE_VERSION * 10_000_000 +
-                    (BuildConfig.VERSION_CODE % 10_000_000),
+                (HEAD_TRACKER_SERVICE_VERSION shl 28) or
+                    (BuildConfig.VERSION_CODE and 0x0FFF_FFFF),
             )
         args = userServiceArgs
         pendingMac = macAddress

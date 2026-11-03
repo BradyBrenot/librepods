@@ -250,7 +250,7 @@ class HeadTrackingParserTest {
         val pose = HeadTracking.pose.value!!
         assertEquals(before, pose.discontinuity)
         val avNorm = kotlin.math.sqrt(pose.angularVelocity.sumOf { (it * it).toDouble() }).toFloat()
-        assertTrue(avNorm > 0.01f)
+        assertEquals(7.79f, avNorm, 0.2f)
         HeadTracking.reset()
     }
 
@@ -295,19 +295,22 @@ class HeadTrackingParserTest {
         )
         val next = HeadTracking.pose.value!!
         assertEquals(gapDiscontinuity, next.discontinuity)
-        val nextAv = kotlin.math.sqrt(next.angularVelocity.sumOf { (it * it).toDouble() })
-        assertTrue(nextAv > 0.01)
+        val nextAv = kotlin.math.sqrt(next.angularVelocity.sumOf { (it * it).toDouble() }).toFloat()
+        assertEquals(0.802f, nextAv, 0.05f)
         HeadTracking.reset()
     }
 
     @Test
     fun antipodeWrapKeepsTwistContinuous() {
         HeadTracking.reset()
+        // Neutral is 90 degrees about Y. The two relative poses are (pi - 0.05) and
+        // -(pi - 0.05) about X: their canonicalised dot is about -0.999, the case the old
+        // antipodal guard used to turn into a zero twist plus a discontinuity.
         repeat(25) { index ->
             HeadTracking.processPacket(
                 packet(
                     1,
-                    command(14, blob(4000, 0, 0, index * 40_000_000L, rotationRate = 5)),
+                    command(14, blob(0, 23170, 0, index * 40_000_000L, rotationRate = 5)),
                 ),
             )
         }
@@ -315,7 +318,7 @@ class HeadTrackingParserTest {
         HeadTracking.processPacket(
             packet(
                 1,
-                command(14, blob(32766, 0, 0, 25 * 40_000_000L, rotationRate = 5)),
+                command(14, blob(23163, 579, 23163, 25 * 40_000_000L, rotationRate = 5)),
             ),
         )
         HeadTracking.processPacket(
@@ -323,14 +326,14 @@ class HeadTrackingParserTest {
                 1,
                 command(
                     14,
-                    blob(-32766, 0, 0, 25 * 40_000_000L + 40_000_000L, rotationRate = 5),
+                    blob(-23163, 579, -23163, 25 * 40_000_000L + 40_000_000L, rotationRate = 5),
                 ),
             ),
         )
         val pose = HeadTracking.pose.value!!
         assertEquals(before, pose.discontinuity)
-        val avNorm = kotlin.math.sqrt(pose.angularVelocity.sumOf { (it * it).toDouble() })
-        assertTrue(avNorm > 0.1)
+        val avNorm = kotlin.math.sqrt(pose.angularVelocity.sumOf { (it * it).toDouble() }).toFloat()
+        assertEquals(2.5f, avNorm, 0.1f)
         HeadTracking.reset()
     }
 
