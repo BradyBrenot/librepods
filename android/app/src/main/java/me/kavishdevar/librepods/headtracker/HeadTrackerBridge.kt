@@ -264,8 +264,8 @@ object HeadTrackerBridge {
             .debuggable(BuildConfig.DEBUG)
             // Pack the manual protocol version in the high nibble and the app version in the
             // low 28 bits. This cannot alias a normal version-code bump and lets a debug
-            // rebuild force a new UserService by incrementing the constant. The version code
-            // must stay below 2^28 (~268M), which is far above the current scheme.
+            // rebuild force a new UserService by incrementing the constant. The build fails
+            // if the version code does not fit in 28 bits (see versioning.gradle.kts).
             .version(
                 (HEAD_TRACKER_SERVICE_VERSION shl 28) or
                     (BuildConfig.VERSION_CODE and 0x0FFF_FFFF),

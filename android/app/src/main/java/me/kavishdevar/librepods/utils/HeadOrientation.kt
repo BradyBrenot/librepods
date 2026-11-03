@@ -66,7 +66,7 @@ object HeadTracking {
     private const val CALIBRATION_SAMPLE_COUNT = 10
     private const val POSE_CALIBRATION_SAMPLE_COUNT = 25
     private const val POSE_CALIBRATION_TIMEOUT_NANOS = 5_000_000_000L
-    /** Five missed 40 ms samples; a longer gap is a pause, not normal cadence. */
+    /** Five 40 ms intervals; a longer gap is a pause, not normal cadence. */
     private const val MAX_SAMPLE_GAP_NANOS = 200_000_000L
     /**
      * Sum of |rotation-rate| words. The captured AirPods 4 data is a few LSB at rest and

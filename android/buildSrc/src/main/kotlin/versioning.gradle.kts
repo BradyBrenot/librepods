@@ -38,6 +38,9 @@ val appVersionCode = (
         require(it in 1..2_100_000_000L) {
             "versionCode exceeds Android's maximum"
         }
+        require(it < (1L shl 28)) {
+            "versionCode $it must fit in 28 bits for the head-tracker UserService version"
+        }
     }.toInt()
 
 extensions.extraProperties["appVersionName"] = appVersionName

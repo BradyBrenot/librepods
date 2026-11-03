@@ -79,8 +79,8 @@ If consecutive samples are more than 200 ms apart (bud removal, link pause),
 that sample, and continues from the current sample as the new previous. A
 quaternion sign flip at the neutral antipode is deliberately **not** treated as
 a gap: `angularVelocity` already takes the shortest path, so the twist stays
-continuous. Tests: `sampleGapRaisesDiscontinuityAndDropsTheTwist` and
-`normalCadenceKeepsTwistAndDiscontinuity`.
+continuous. Tests: `sampleGapRaisesDiscontinuityAndDropsTheTwist`,
+`normalCadenceKeepsTwistAndDiscontinuity`, and `antipodeWrapKeepsTwistContinuous`.
 
 ### 5. Host-driven battery gating
 
