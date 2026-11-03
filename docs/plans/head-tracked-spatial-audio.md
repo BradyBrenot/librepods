@@ -619,7 +619,31 @@ send pose to OpenTrack. LibrePods does not target Windows in `main`. This is out
 - Test with the screen off and with the app backgrounded (foreground service).
 - Check battery impact over a 30-minute session.
 
-### 6.5 CI
+### 6.5 Device validation log
+
+- **2026-11-03 - Pixel 9 Pro (`caiman`), Android 17 / SDK 37, user build, `ro.debuggable=0`, no root.**
+  - `adb shell id`: `uid=2000(shell)`, groups include `3011(uhid)`; `/dev/uhid` is
+    `0660 uhid:uhid`; opening it from shell succeeds.
+  - The AOSP `/system/bin/hid` command was used with a hand-built HID v1.0 head-tracker
+    descriptor: feature report 2 = 23-byte `#AndroidHeadTracker#1.0` + 16-byte UUID;
+    feature report 1 = reporting state / power state / report interval; input report 1 =
+    3 x i16 rotation vector + 3 x i16 angular velocity + u8 discontinuity. Feature report
+    data includes the report ID.
+  - `DynamicSensorHal` logs `detectAndroidHeadTrackerSensor: #AndroidHeadTracker#1.0` and
+    `return 1 sensors`.
+  - `dumpsys sensorservice` shows:
+    `LibrePods Head Tracker | Bluetooth 004c:004c | ver: 16777216 | type:
+    android.sensor.head_tracker(37)`.
+  - `dumpsys audio` reports `mHasSpatializerEffect:true`,
+    `mIsHeadTrackingSupported:true`, supported mode
+    `HEAD_TRACKING_MODE_RELATIVE_WORLD`, and `supports binaural:true`.
+    `headtracker available:false` is expected here: the active route was the speaker and
+    the test sensor used the standalone all-zero UUID.
+  - The faux sensor was cleaned up; `dumpsys sensorservice` no longer shows it.
+  - Pending: AirPods 4 ANC A2DP route + real-MAC UUID -> `headtracker available:true`;
+    Shizuku UserService route; real AAP `0x17` stream; actual spatial rendering.
+
+### 6.6 CI
 
 - The repository currently has no Android unit-test source set and `ci-android.yml` only
   assembles the APK; there is no JUnit dependency or test task. Add `app/src/test`, add
