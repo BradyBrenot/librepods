@@ -108,8 +108,7 @@ object HeadTracking {
             return
         }
 
-        var relative = neutral.conjugate() * sample.quaternion
-        if (relative.w < 0f) relative = relative.negated()
+        val relative = HeadTrackingParser.relativeRotation(sample.quaternion, neutral)
         val deltaSeconds =
             (sample.timestampNanos - previousTimestampNanos) / 1_000_000_000.0
         val angularVelocity = previousPoseQuaternion?.let {

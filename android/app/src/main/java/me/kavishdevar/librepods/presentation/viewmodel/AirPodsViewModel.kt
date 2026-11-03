@@ -637,7 +637,8 @@ class AirPodsViewModel(
 
     fun stopHeadTracking() {
         service.stopHeadTracking()
-        _uiState.update { it.copy(headTrackingActive = false) }
+        // System spatial audio keeps the stream alive after the visualizer closes.
+        _uiState.update { it.copy(headTrackingActive = service.isHeadTrackingActive) }
     }
 
     fun setATTCharacteristicValue(handle: ATTHandles, value: ByteArray) {

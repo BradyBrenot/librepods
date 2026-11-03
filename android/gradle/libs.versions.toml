@@ -1,5 +1,6 @@
 [versions]
 junit = "4.13.2"
+shizuku = "13.1.5"
 accompanistPermissions = "0.37.3"
 agp = "9.2.1"
 kotlin = "2.3.21"
@@ -30,6 +31,8 @@ uiTextGoogleFonts = "1.11.2"
 
 [libraries]
 junit = { module = "junit:junit", version.ref = "junit" }
+shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku" }
+shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku" }
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }

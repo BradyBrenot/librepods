@@ -265,6 +265,18 @@ object HeadTrackingParser {
     }
 
     /**
+     * Rotation from [neutral] to [current], expressed in the world frame.
+     *
+     * `q` maps body to world, so `q * neutral^-1` is the world-frame delta. The sign is
+     * canonicalised so the reconstructed rotation vector takes the shortest path.
+     */
+    fun relativeRotation(current: Quaternion, neutral: Quaternion): Quaternion {
+        var relative = current * neutral.conjugate()
+        if (relative.w < 0f) relative = relative.negated()
+        return relative
+    }
+
+    /**
      * Converts a quaternion to the shortest rotation vector (axis * angle, radians).
      * The result is in the same frame as [quaternion].
      */
@@ -288,7 +300,8 @@ object HeadTrackingParser {
         deltaSeconds: Double,
     ): FloatArray {
         if (deltaSeconds < 1e-3 || deltaSeconds > 0.5) return FloatArray(3)
-        var delta = previous.conjugate() * current
+        // World-frame delta, matching the rotation vector's frame.
+        var delta = current * previous.conjugate()
         if (delta.w < 0f) delta = delta.negated()
         val sinHalf = sqrt((delta.x * delta.x + delta.y * delta.y + delta.z * delta.z).toDouble())
         if (sinHalf < 1e-6) return FloatArray(3)

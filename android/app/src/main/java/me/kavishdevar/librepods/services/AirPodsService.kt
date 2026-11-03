@@ -112,6 +112,7 @@ import me.kavishdevar.librepods.presentation.overlays.PopupWindow
 import me.kavishdevar.librepods.presentation.widgets.BatteryWidget
 import me.kavishdevar.librepods.presentation.widgets.NoiseControlWidget
 import me.kavishdevar.librepods.utils.GestureDetector
+import me.kavishdevar.librepods.headtracker.HeadTrackerBridge
 import me.kavishdevar.librepods.utils.HeadTracking
 import me.kavishdevar.librepods.utils.HeadTrackingSample
 import me.kavishdevar.librepods.utils.MediaController
@@ -1098,8 +1099,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                                 "the service id or sample layout may have changed",
                         )
                     }
-                    if (BuildConfig.DEBUG) {
-                        HeadTracking.pose.value?.let { pose ->
+                    HeadTracking.pose.value?.let { pose ->
+                        HeadTrackerBridge.updatePose(pose)
+                        if (BuildConfig.DEBUG) {
                             Log.d(
                                 "HeadPoseRaw",
                                 "rv=[${pose.rotationVector.joinToString(",")}] " +
@@ -1497,7 +1499,28 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
         when (key) {
             "name" -> config.deviceName = preferences.getString(key, "AirPods") ?: "AirPods"
-            "mac_address" -> macAddress = preferences.getString(key, "") ?: ""
+            "mac_address" -> {
+                macAddress = preferences.getString(key, "") ?: ""
+                if (isHeadTrackingActive && macAddress.isNotBlank() &&
+                    !BuildConfig.PLAY_BUILD &&
+                    sharedPreferences.getBoolean("system_spatial_audio_enabled", false)
+                ) {
+                    HeadTrackerBridge.ensureStarted(this, macAddress)
+                }
+            }
+            "system_spatial_audio_enabled" -> {
+                if (!BuildConfig.PLAY_BUILD && preferences.getBoolean(key, false)) {
+                    if (isHeadTrackingActive && macAddress.isNotBlank()) {
+                        HeadTrackerBridge.ensureStarted(this, macAddress)
+                    }
+                    if (device != null && !isHeadTrackingActive) {
+                        startHeadTracking()
+                    }
+                } else {
+                    HeadTrackerBridge.stop()
+                    if (isHeadTrackingActive) stopHeadTracking()
+                }
+            }
             "automatic_ear_detection" -> config.earDetectionEnabled =
                 preferences.getBoolean(key, true)
 
@@ -3148,6 +3171,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
         resetHeadTrackingState()
         headTrackingScope.cancel()
+        HeadTrackerBridge.shutdown()
 
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
 
@@ -3247,6 +3271,12 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                 }
             }
             HeadTracking.reset()
+            val mac = macAddress
+            if (mac.isNotBlank() &&
+                sharedPreferences.getBoolean("system_spatial_audio_enabled", false)
+            ) {
+                HeadTrackerBridge.ensureStarted(this, mac)
+            }
         }
     }
 
@@ -3261,6 +3291,18 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     }
 
     fun stopHeadTracking() {
+        // System spatial audio owns the stream while it is enabled and the AirPods are
+        // connected; closing the visualizer or the post-connect gesture window must not
+        // tear down the UHID sensor under the system spatializer.
+        if (!BuildConfig.PLAY_BUILD &&
+            sharedPreferences.getBoolean("system_spatial_audio_enabled", false) &&
+            device != null
+        ) {
+            Log.d(TAG, "Keeping head-tracking streams for system spatial audio")
+            gestureDetector?.stopDetection(doNotStop = true)
+            return
+        }
+
         val generation: Int
         synchronized(headTrackingStartLock) {
             isHeadTrackingActive = false
@@ -3285,6 +3327,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                 )
             }
         }
+        HeadTrackerBridge.stop()
         // Avoid the stopDetection() -> stopHeadTracking() bounce.
         gestureDetector?.stopDetection(doNotStop = true)
     }
@@ -3297,6 +3340,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             headTrackingStartJob?.cancel()
             headTrackingStartJob = null
         }
+        HeadTrackerBridge.stop()
         HeadTracking.reset()
     }
 

@@ -130,6 +130,31 @@ class HeadTrackingParserTest {
     }
 
     @Test
+    fun relativePoseIsExpressedInWorldFrame() {
+        // Neutral is rotated around Y; a world-frame pitch of 0.5 rad around X must
+        // survive the neutral removal as an X rotation, not a mixed body-frame axis.
+        val neutral = Quaternion(cos(0.3f), 0f, sin(0.3f), 0f).normalized()
+        val pitch = Quaternion(cos(0.25f), sin(0.25f), 0f, 0f)
+        val current = pitch * neutral
+        val relative = HeadTrackingParser.relativeRotation(current, neutral)
+        assertArrayEquals(
+            floatArrayOf(0.5f, 0f, 0f),
+            HeadTrackingParser.toRotationVector(relative),
+            1e-4f,
+        )
+    }
+
+    @Test
+    fun angularVelocityUsesWorldFrame() {
+        // Previous orientation is rotated around Y; the next step is a world-frame pitch
+        // around X. The resulting angular velocity must be pure X, not a body-frame mix.
+        val previous = Quaternion(cos(0.3f), 0f, sin(0.3f), 0f).normalized()
+        val current = Quaternion(cos(0.05f), sin(0.05f), 0f, 0f) * previous
+        val omega = HeadTrackingParser.angularVelocity(previous, current, 0.1)
+        assertArrayEquals(floatArrayOf(1f, 0f, 0f), omega, 1e-3f)
+    }
+
+    @Test
     fun rotationVectorRoundTripsSmallRotation() {
         val half = 0.25f // half angle: rotation of 0.5 rad around X
         val q = Quaternion(cos(half), sin(half), 0f, 0f)

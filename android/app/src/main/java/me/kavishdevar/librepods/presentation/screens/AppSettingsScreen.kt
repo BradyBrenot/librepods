@@ -194,6 +194,16 @@ fun AppSettingsScreen(
         )
 
         if (state.connectionSuccessful) {
+            if (!BuildConfig.PLAY_BUILD) {
+                StyledToggle(
+                    title = stringResource(R.string.advanced_options),
+                    label = stringResource(R.string.system_spatial_audio),
+                    description = stringResource(R.string.system_spatial_audio_description),
+                    checked = state.systemSpatialAudioEnabled,
+                    onCheckedChange = viewModel::setSystemSpatialAudioEnabled,
+                )
+            }
+
             StyledToggle(
                 title = stringResource(R.string.widget),
                 label = stringResource(R.string.show_phone_battery_in_widget),

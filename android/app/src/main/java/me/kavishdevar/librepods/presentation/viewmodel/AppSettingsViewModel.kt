@@ -26,6 +26,7 @@ data class AppSettingsUiState(
     val takeoverWhenCall: Boolean = false,
     val takeoverWhenRingingCall: Boolean = false,
     val takeoverWhenMediaStart: Boolean = false,
+    val systemSpatialAudioEnabled: Boolean = false,
     val conversationAwarenessVolume: Float = 43f,
     val showCameraDialog: Boolean = false,
     val cameraPackageValue: String = "",
@@ -144,6 +145,7 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
                 takeoverWhenCall = sharedPreferences.getBoolean("takeover_when_call", false),
                 takeoverWhenRingingCall = sharedPreferences.getBoolean("takeover_when_ringing_call", false),
                 takeoverWhenMediaStart = sharedPreferences.getBoolean("takeover_when_media_start", false),
+                systemSpatialAudioEnabled = sharedPreferences.getBoolean("system_spatial_audio_enabled", false),
                 conversationAwarenessVolume = sharedPreferences.getInt("conversation_awareness_volume", 43).toFloat(),
                 cameraPackageValue = sharedPreferences.getString("custom_camera_package", "") ?: "",
                 vendorIdHook = xposedRemotePref.getBoolean("vendor_id_hook", false),
@@ -203,6 +205,11 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
     fun setTakeoverWhenMediaStart(enabled: Boolean) {
         sharedPreferences.edit { putBoolean("takeover_when_media_start", enabled) }
         _uiState.update { it.copy(takeoverWhenMediaStart = enabled) }
+    }
+
+    fun setSystemSpatialAudioEnabled(enabled: Boolean) {
+        sharedPreferences.edit { putBoolean("system_spatial_audio_enabled", enabled) }
+        _uiState.update { it.copy(systemSpatialAudioEnabled = enabled) }
     }
 
     fun setConversationAwarenessVolume(volume: Float) {

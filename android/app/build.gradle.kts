@@ -102,6 +102,7 @@ android {
         compose = true
         viewBinding = true
         buildConfig = true
+        aidl = true
     }
     androidResources {
         generateLocaleConfig = true
@@ -159,6 +160,8 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.androidx.navigationevent)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     testImplementation(libs.junit)
 }
 

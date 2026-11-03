@@ -685,11 +685,29 @@ send pose to OpenTrack. LibrePods does not target Windows in `main`. This is out
     `HeadTracking.pose`, and keeps the legacy pitch/yaw visualizer fields. Unit tests cover
     the real capture, batching, framing, near-identity/180-degree attitudes, malformed
     truncation, rotation-vector/angular-velocity math, calibration and recenter.
-  - **Still pending:** AirPods-to-Android axis mapping (the quaternion frame is not yet
-    validated with nod/shake motion); Shizuku UserService integration (the UHID test used
-    `adb shell`, the same shell UID but not the Shizuku Binder transport); 25 Hz source rate
-    vs. the 50 Hz UHID input requirement; production host-gated streaming; audible
-    HRTF/effect output.
+  - **Shizuku UserService bridge implemented (2026-11-03).** Shizuku 13.6.0 was installed
+    and started in ADB mode. The app binds `HeadTrackerUserService` as shell UID 2000 through
+    `Shizuku.bindUserService`; the service creates the same UHID head tracker, answers
+    feature reports, and receives `HeadTracking.pose` over Binder. The app writes the UHID
+    input report at 50 Hz from the latest 25 Hz AirPods sample and respects the host's
+    Reporting State / Power State, the 250 ms stale-pose window, and the ±32 rad/s range.
+  - **End-to-end verified on the Pixel with the real AirPods:** with the `System spatial
+    audio (Shizuku)` setting enabled and a silent 5.1 `AudioTrack` probe, the service logged
+    `SET_REPORT state=0x03 reporting=true power=true`; `SpatializerPoseController` showed
+    `HeadSensor: 0x...` active, `ActualMode: WORLD_RELATIVE`, `calculated 51 samples in
+    1.0000 second(s)`; `dumpsys audio` showed `mActualHeadTrackingMode:
+    HEAD_TRACKING_MODE_RELATIVE_WORLD`, `HT: true HTenabled: true`, and
+    `headtracker available:true`.
+  - **Lifecycle:** while the setting is enabled and the AirPods are connected, the app keeps
+    the `0x17` streams and the UHID device alive after the Head Tracking screen closes and
+    after the post-connect gesture window; turning the setting off destroys the sensor.
+    Verified on device: the sensor survived screen close and was recreated after off/on.
+    This is still driven by the setting rather than a full reference-counted stream arbiter.
+  - **Still pending:** AirPods-to-Android axis mapping and sign (the quaternion frame is not
+    yet validated with nod/shake motion); audible HRTF/effect output; host-driven gating of
+    the AirPods `0x17` stream (the app currently streams while the setting is on even if the
+    OS has not activated the sensor); minified-release on-device binding; Shizuku restart
+    recovery; Oppo Find X9 and Logitech G Cloud validation.
 
 ### 6.6 CI
 

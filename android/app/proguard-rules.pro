@@ -21,3 +21,6 @@
 #-renamesourcefileattribute SourceFile
 
 -keep class me.kavishdevar.librepods.utils.KotlinModule { *; }
+
+# Shizuku instantiates the UserService reflectively; keep its constructor and AIDL stubs.
+-keep class me.kavishdevar.librepods.headtracker.** { *; }
