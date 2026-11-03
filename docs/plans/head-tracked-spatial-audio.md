@@ -259,6 +259,14 @@ stereo upmix/spatialization toggle. The plan must test both:
 (a) a 5.1 movie and (b) stereo music. If the target OEM does not spatialize stereo, the
 feature should say so in the UI rather than implying that all audio rotates.
 
+There is a second activation gate. `Spatializer::shouldUseHeadTracking_l()` is
+`containsImmersiveChannelMask(mActiveTracksMasks)`: Android only hands the head sensor to
+`SpatializerPoseController` while an immersive/multichannel track is actively playing. With no
+5.1/Atmos playback, the sensor can be present and associated (`HT: true`, `headtracker
+available: true`) while `SpatializerPoseController` stays `HeadSensor: INVALID` and
+`ActualMode: STATIC`. Stereo-only playback never exercises head tracking, even on a device
+whose spatializer effect supports it.
+
 ### 4.2 Delivery mechanism: `/dev/uhid`
 
 A privileged helper creates a virtual HID device through `/dev/uhid`. The helper can be a
@@ -648,12 +656,22 @@ send pose to OpenTrack. LibrePods does not target Windows in `main`. This is out
     `dumpsys audio` shows `HT: true HTenabled: true`, `headtracker available:true`,
     `isSpatializerEnabled:true`, `mSpatLevel:1`; `dumpsys media.audio_policy` shows
     `HeadSensorHandle: 0x...`.
-  - **Remaining OS-side blocker:** `SpatializerPoseController` reports
-    `HeadSensor: INVALID` / `Sensors total number 0`, and `mActualHeadTrackingMode` stays
-    `DISABLED`. The AOSP `hid` command does not auto-reply to `UHID_SET_REPORT`, so the
-    dynamic-sensor HAL's `enable()` blocks while setting report 1 (reporting state / power /
-    interval). The next step is a standalone UHID helper with a complete feature-report
-    state machine, then the same helper inside a Shizuku UserService.
+  - **OS-side blocker resolved with a test helper.** The AOSP `hid` command does not
+    auto-reply to `UHID_SET_REPORT`, so the dynamic-sensor HAL's `enable()` blocked while
+    setting report 1. `tools/uhid-headtracker/` now implements the complete feature-report
+    state machine in Java and runs as shell UID 2000 via `app_process`.
+  - **Verified with the helper (2026-11-03):** `dumpsys media.audio_policy` shows
+    `HeadSensor: 0x...`, `ActualMode: WORLD_RELATIVE`, and `calculated 51 samples in
+    1.0000 second(s)`; `dumpsys audio` shows `mActualHeadTrackingMode:
+    HEAD_TRACKING_MODE_RELATIVE_WORLD`, `HT: true HTenabled: true`, and
+    `headtracker available:true`. No `avc` denials for `uhid_device`/`hidraw_device`.
+    Cleanup removes the sensor and `/data/local/tmp` artifacts.
+  - **Activation gate:** a silent 5.1 `AudioTrack` probe is required to make AOSP activate
+    the sensor; with no immersive track, `HeadSensor` stays `INVALID`. This confirms the
+    stereo-content limitation in practice.
+  - **Still pending:** Shizuku UserService integration (the test used `adb shell`, the same
+    shell UID but not the Shizuku Binder transport); real AirPods `0x17` pose, axis mapping,
+    and latency; production host-gated streaming; audible HRTF/effect output.
 
 ### 6.6 CI
 
