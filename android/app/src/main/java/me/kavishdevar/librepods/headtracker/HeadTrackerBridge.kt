@@ -41,6 +41,13 @@ object HeadTrackerBridge {
     private const val TAG = "HeadTrackerBridge"
     private const val PERMISSION_REQUEST_CODE = 0x4C50
 
+    /**
+     * Bump this whenever HeadTrackerUserService/UhidHeadTracker changes: Shizuku reuses a
+     * running UserService with the same version, so debug rebuilds would otherwise keep the
+     * old code. The app version code is not enough because debug builds share it.
+     */
+    private const val HEAD_TRACKER_SERVICE_VERSION = 2
+
     @Volatile
     private var service: IHeadTrackerService? = null
 
@@ -254,7 +261,7 @@ object HeadTrackerBridge {
             .tag("librepods_head_tracker")
             .processNameSuffix("head_tracker")
             .debuggable(BuildConfig.DEBUG)
-            .version(BuildConfig.VERSION_CODE)
+            .version(HEAD_TRACKER_SERVICE_VERSION)
         args = userServiceArgs
         pendingMac = macAddress
         binding = true

@@ -132,6 +132,9 @@ class UhidHeadTracker(private val macAddress: String) {
     @Volatile
     private var lastPoseNanos = 0L
 
+    private var txReports = 0L
+    private var txWindowStart = 0L
+
     private var device: RandomAccessFile? = null
     private var channel: FileChannel? = null
     private var reader: Thread? = null
@@ -151,6 +154,8 @@ class UhidHeadTracker(private val macAddress: String) {
         channel = file.channel
         sendCreate2()
         running.set(true)
+        txReports = 0
+        txWindowStart = 0L
 
         reader = Thread({ readLoop() }, "uhid-headtracker-reader").apply {
             isDaemon = true
@@ -159,6 +164,8 @@ class UhidHeadTracker(private val macAddress: String) {
         writer = Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread(runnable, "uhid-headtracker-writer").apply { isDaemon = true }
         }.also {
+            // The HAL delivers ~44 samples/s even when the UHID writer runs at 100 Hz, so
+            // 20 ms (50 Hz, the AOSP minimum) is the useful rate. More writes only burn CPU.
             it.scheduleAtFixedRate({ sendInputReport() }, 0, 20, TimeUnit.MILLISECONDS)
         }
         Log.d(TAG, "started")
@@ -294,6 +301,15 @@ class UhidHeadTracker(private val macAddress: String) {
         val twist = if (age > 80_000_000L) FloatArray(3) else angularVelocity
         try {
             sendInput2(encodeInputReport(rotationVector, twist, discontinuity))
+            txReports++
+            val now = System.nanoTime()
+            if (txWindowStart == 0L) txWindowStart = now
+            val elapsed = now - txWindowStart
+            if (elapsed >= 1_000_000_000L) {
+                Log.d(TAG, "tx reports/s=${txReports * 1_000_000_000L / elapsed}")
+                txReports = 0
+                txWindowStart = now
+            }
         } catch (e: Exception) {
             Log.w(TAG, "input report failed: ${e.message}")
         }

@@ -55,6 +55,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.ParcelUuid
+import android.os.SystemClock
 import android.os.UserHandle
 import android.provider.Settings
 import android.telecom.TelecomManager
@@ -141,7 +142,12 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "AirPodsService"
 
-/** Requested interval for head-tracking streams: 40 000 us = 25 Hz. */
+/**
+ * Requested interval for head-tracking streams: 40 000 us = 25 Hz.
+ *
+ * A 20 000 us (50 Hz) request was tested on AirPods 4 ANC and still produced ~26
+ * samples/s, so the accessory caps the stream at 25 Hz. Keep the interval it honours.
+ */
 private const val HEAD_TRACKING_INTERVAL_MICROS = 40_000
 
 /** Spacing between the stream 14 activation request and the stream 16 motion request. */
@@ -1108,6 +1114,23 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                                     "av=[${pose.angularVelocity.joinToString(",")}] " +
                                     "disc=${pose.discontinuity}",
                             )
+                        }
+                    }
+                    if (BuildConfig.DEBUG) {
+                        headTrackingRateSamples += samples.size
+                        headTrackingRatePackets++
+                        val now = SystemClock.elapsedRealtime()
+                        if (headTrackingRateStart == 0L) headTrackingRateStart = now
+                        val elapsed = now - headTrackingRateStart
+                        if (elapsed >= 1000) {
+                            Log.d(
+                                "HeadTrackingRate",
+                                "samples/s=${headTrackingRateSamples * 1000 / elapsed} " +
+                                    "packets/s=${headTrackingRatePackets * 1000 / elapsed}",
+                            )
+                            headTrackingRateSamples = 0
+                            headTrackingRatePackets = 0
+                            headTrackingRateStart = 0L
                         }
                     }
                 }
@@ -3229,6 +3252,10 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     @Volatile
     private var loggedUnparsedHeadTracking = false
 
+    private var headTrackingRateSamples = 0
+    private var headTrackingRatePackets = 0
+    private var headTrackingRateStart = 0L
+
     /**
      * Requests both head-tracking streams from the AirPods.
      *
@@ -3246,6 +3273,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             }
             isHeadTrackingActive = true
             loggedUnparsedHeadTracking = false
+            headTrackingRateSamples = 0
+            headTrackingRatePackets = 0
+            headTrackingRateStart = 0L
             generation = ++headTrackingGeneration
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && aacpManager.getControlCommandStatus(
                     AACPManager.Companion.ControlCommandIdentifiers.OWNS_CONNECTION
@@ -3340,6 +3370,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             headTrackingStartJob?.cancel()
             headTrackingStartJob = null
         }
+        headTrackingRateSamples = 0
+        headTrackingRatePackets = 0
+        headTrackingRateStart = 0L
         HeadTrackerBridge.stop()
         HeadTracking.reset()
     }

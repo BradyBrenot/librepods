@@ -66,6 +66,7 @@ object HeadTracking {
     private const val CALIBRATION_SAMPLE_COUNT = 10
     private const val POSE_CALIBRATION_SAMPLE_COUNT = 25
     private const val POSE_CALIBRATION_TIMEOUT_NANOS = 5_000_000_000L
+    private const val MAX_SAMPLE_GAP_NANOS = 200_000_000L
     /**
      * Sum of |rotation-rate| words. The captured AirPods 4 data is a few LSB at rest and
      * thousands during a deliberate nod, so 2000 is a conservative "still" gate.
@@ -149,13 +150,24 @@ object HeadTracking {
         }
 
         val relative = HeadTrackingParser.relativeRotation(sample.quaternion, neutral)
-        val deltaSeconds =
-            (sample.timestampNanos - previousTimestampNanos) / 1_000_000_000.0
+        val deltaNanos = sample.timestampNanos - previousTimestampNanos
+        val gap = previousPoseQuaternion != null &&
+            (deltaNanos < 0L || deltaNanos > MAX_SAMPLE_GAP_NANOS)
+        val antipodal = previousPoseQuaternion?.dot(relative)?.let { it < -0.9f } == true
+        if (gap || antipodal) {
+            // Bud removal, link pause, or a pose wrap: do not report a bogus twist across it.
+            discontinuity++
+        }
+        val deltaSeconds = deltaNanos / 1_000_000_000.0
         // The twist must be the delta of the reported (neutral-relative) pose, not the raw
         // body delta: AOSP right-multiplies the intrinsic twist into the reported pose.
-        val angularVelocity = previousPoseQuaternion?.let {
-            HeadTrackingParser.angularVelocity(it, relative, deltaSeconds)
-        } ?: FloatArray(3)
+        val angularVelocity = if (gap || antipodal) {
+            FloatArray(3)
+        } else {
+            previousPoseQuaternion?.let {
+                HeadTrackingParser.angularVelocity(it, relative, deltaSeconds)
+            } ?: FloatArray(3)
+        }
 
         previousPoseQuaternion = relative
         previousTimestampNanos = sample.timestampNanos
