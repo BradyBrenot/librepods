@@ -291,7 +291,7 @@ class UhidHeadTracker(private val macAddress: String) {
         // interval so a paused AirPods stream cannot keep predicting motion.
         val age = System.nanoTime() - lastPoseNanos
         if (lastPoseNanos == 0L || age > 120_000_000L) return
-        val twist = if (age > 60_000_000L) FloatArray(3) else angularVelocity
+        val twist = if (age > 80_000_000L) FloatArray(3) else angularVelocity
         try {
             sendInput2(encodeInputReport(rotationVector, twist, discontinuity))
         } catch (e: Exception) {
