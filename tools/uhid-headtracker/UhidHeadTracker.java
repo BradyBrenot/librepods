@@ -103,6 +103,8 @@ public final class UhidHeadTracker {
 
     // ---------------------------------------------------------------- entry point
 
+    private static int poseAxis = 0;
+
     public static void main(String[] args) {
         String mac = null;
         long seconds = 0;
@@ -121,6 +123,19 @@ public final class UhidHeadTracker {
                 reportId = true;
             } else if ("--rate".equals(a) && i + 1 < args.length) {
                 rateHz = Integer.parseInt(args[++i]);
+            } else if ("--axis".equals(a) && i + 1 < args.length) {
+                String axis = args[++i].toLowerCase(Locale.US);
+                if ("x".equals(axis)) {
+                    poseAxis = 0;
+                } else if ("y".equals(axis)) {
+                    poseAxis = 1;
+                } else if ("z".equals(axis)) {
+                    poseAxis = 2;
+                } else {
+                    err("unknown axis: " + axis);
+                    usage();
+                    return;
+                }
             } else if ("--help".equals(a) || "-h".equals(a)) {
                 usage();
                 return;
@@ -164,6 +179,7 @@ public final class UhidHeadTracker {
         System.out.println("  --seconds N      stop automatically after N seconds (default: run until killed)");
         System.out.println("  --no-report-id   omit the report ID as the first feature-report byte");
         System.out.println("  --rate HZ        input report rate, default 50");
+        System.out.println("  --axis x|y|z     synthetic rotation axis for the pose test (default: x)");
         System.out.flush();
     }
 
@@ -298,7 +314,10 @@ public final class UhidHeadTracker {
                 angle = maxRad;
             }
             try {
-                sendInputReport1(angle, 0.0, 0.0, 0.0, 0.0, 0.0, 0);
+                double ax = poseAxis == 0 ? angle : 0.0;
+                double ay = poseAxis == 1 ? angle : 0.0;
+                double az = poseAxis == 2 ? angle : 0.0;
+                sendInputReport1(ax, ay, az, 0.0, 0.0, 0.0, 0);
                 sentReports++;
                 if (sentReports % (rateHz * 5L) == 0) {
                     log("STATE tx reports=" + sentReports + " events=" + receivedEvents

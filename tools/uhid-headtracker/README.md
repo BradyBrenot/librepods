@@ -79,7 +79,13 @@ adb -s <serial> shell "app_process -Djava.class.path=/data/local/tmp/uhid.jar /s
 ```
 
 Helper options: `<BT-MAC>` (required; becomes the persistent UUID),
-`--seconds N`, `--no-report-id`, `--rate HZ` (default 50).
+`--seconds N`, `--no-report-id`, `--rate HZ` (default 50), and
+`--axis x|y|z` for the synthetic pose test (default: x).
+
+Axis check (synthetic pose + 5.1 probe): `--axis x` moves the pose controller's
+`d_pitch`, `--axis y` moves `d_roll`, and `--axis z` moves `d_yaw`. This confirms
+Android's rotation-vector frame is X=pitch, Y=roll, Z=yaw, so a world-frame
+quaternion delta should map directly (sign still needs a real nod/shake check).
 
 The 5.1 probe, which the acceptance checks need:
 
@@ -184,7 +190,8 @@ type: 8 ... addr: XX:XX:XX:XX:XX:XX ... enabled: true HT: true HTenabled: true
 - Input report 1: `01` + 3 x i16 rotation vector (`i16 = round(rad * 32767/pi)`) + 3 x i16
   angular velocity (`i16 = round(rad/s * 32767/32)`) + u8 discontinuity = 14 bytes, sent every
   20 ms (50 Hz) while `UHID_START` + `UHID_OPEN` are set. The synthetic pose alternates
-  +/-0.05 rad around X every 500 ms; angular velocity and discontinuity are 0.
+  +/-0.05 rad around the selected `--axis` (default X) every 500 ms; angular velocity and
+  discontinuity are 0.
 - The HAL requested a 10 ms period; this test tool sends 20 ms (it does not honor the host
   interval) and still meets the AOSP >= 50 Hz rule. The descriptor's interval range is
   10..100 ms; the `min`/`max` values in the dump are delivery/jitter bounds, not the
