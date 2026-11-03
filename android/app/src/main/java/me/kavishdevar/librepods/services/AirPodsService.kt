@@ -113,6 +113,7 @@ import me.kavishdevar.librepods.presentation.widgets.BatteryWidget
 import me.kavishdevar.librepods.presentation.widgets.NoiseControlWidget
 import me.kavishdevar.librepods.utils.GestureDetector
 import me.kavishdevar.librepods.utils.HeadTracking
+import me.kavishdevar.librepods.utils.HeadTrackingSample
 import me.kavishdevar.librepods.utils.MediaController
 import me.kavishdevar.librepods.utils.SystemApisUtils
 import me.kavishdevar.librepods.utils.SystemApisUtils.DEVICE_TYPE_UNTETHERED_HEADSET
@@ -133,8 +134,6 @@ import me.kavishdevar.librepods.utils.SystemApisUtils.METADATA_UNTETHERED_RIGHT_
 import me.kavishdevar.librepods.utils.SystemApisUtils.METADATA_UNTETHERED_RIGHT_CHARGING
 import me.kavishdevar.librepods.utils.SystemApisUtils.METADATA_UNTETHERED_RIGHT_ICON
 import me.kavishdevar.librepods.utils.SystemApisUtils.METADATA_UNTETHERED_RIGHT_LOW_BATTERY_THRESHOLD
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Duration.Companion.milliseconds
@@ -1087,8 +1086,28 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             @SuppressLint("NewApi")
             override fun onHeadTrackingReceived(headTracking: ByteArray) {
                 if (isHeadTrackingActive) {
-                    HeadTracking.processPacket(headTracking)
-                    processHeadTrackingData(headTracking)
+                    val samples = HeadTracking.processPacket(headTracking)
+                    // Feed every sample in a batched packet, not just the last one, so the
+                    // gesture detector sees the same peaks it did with one packet per sample.
+                    samples.forEach { processHeadTrackingData(it) }
+                    if (samples.isEmpty() && headTracking.size >= 70 && !loggedUnparsedHeadTracking) {
+                        loggedUnparsedHeadTracking = true
+                        Log.w(
+                            "HeadTrackingParser",
+                            "No motion sample in ${headTracking.size}-byte 0x17 packet; " +
+                                "the service id or sample layout may have changed",
+                        )
+                    }
+                    if (BuildConfig.DEBUG) {
+                        HeadTracking.pose.value?.let { pose ->
+                            Log.d(
+                                "HeadPoseRaw",
+                                "rv=[${pose.rotationVector.joinToString(",")}] " +
+                                    "av=[${pose.angularVelocity.joinToString(",")}] " +
+                                    "disc=${pose.discontinuity}",
+                            )
+                        }
+                    }
                 }
             }
 
@@ -2207,13 +2226,14 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
-    fun processHeadTrackingData(data: ByteArray) {
-        val horizontal = ByteBuffer.wrap(data, 51, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
-        val vertical = ByteBuffer.wrap(data, 53, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
+    fun processHeadTrackingData(sample: HeadTrackingSample) {
+        // The legacy gesture thresholds were tuned on the raw y/z rotation-rate words.
+        val horizontal = sample.rotationRate[1]
+        val vertical = sample.rotationRate[2]
         try {
             gestureDetector?.processHeadOrientation(horizontal, vertical)
         } catch (e: Exception) {
-            Log.w(TAG, "gesture detector on ${data.toHexString()}: ${e.message}")
+            Log.w(TAG, "gesture detector on counter ${sample.counter}: ${e.message}")
         }
     }
 
@@ -3181,6 +3201,10 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     @Volatile
     private var headTrackingGeneration = 0
 
+    /** Avoids spamming when a firmware/model sends a 0x17 framing we cannot parse yet. */
+    @Volatile
+    private var loggedUnparsedHeadTracking = false
+
     /**
      * Requests both head-tracking streams from the AirPods.
      *
@@ -3197,6 +3221,7 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                 return
             }
             isHeadTrackingActive = true
+            loggedUnparsedHeadTracking = false
             generation = ++headTrackingGeneration
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && aacpManager.getControlCommandStatus(
                     AACPManager.Companion.ControlCommandIdentifiers.OWNS_CONNECTION

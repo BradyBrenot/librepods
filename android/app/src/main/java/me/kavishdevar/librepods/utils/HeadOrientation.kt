@@ -25,6 +25,19 @@ import kotlin.math.roundToInt
 data class Orientation(val pitch: Float = 0f, val yaw: Float = 0f)
 data class Acceleration(val vertical: Float = 0f, val horizontal: Float = 0f)
 
+/**
+ * A head pose relative to the neutral orientation captured after the stream starts.
+ *
+ * [rotationVector] is an axis * angle rotation vector in radians (magnitude <= pi),
+ * [angularVelocity] is in radians/second, and [discontinuity] increments whenever the
+ * reference frame is reset.
+ */
+data class HeadPose(
+    val rotationVector: FloatArray,
+    val angularVelocity: FloatArray,
+    val discontinuity: Int,
+)
+
 object HeadTracking {
     private val _orientation = MutableStateFlow(Orientation())
     val orientation = _orientation.asStateFlow()
@@ -32,35 +45,84 @@ object HeadTracking {
     private val _acceleration = MutableStateFlow(Acceleration())
     val acceleration = _acceleration.asStateFlow()
 
+    private val _pose = MutableStateFlow<HeadPose?>(null)
+    val pose = _pose.asStateFlow()
+
     private val calibrationSamples = mutableListOf<Triple<Int, Int, Int>>()
     private var isCalibrated = false
     private var o1Neutral = 19000
     private var o2Neutral = 0
     private var o3Neutral = 0
 
+    private val poseCalibrationSamples = mutableListOf<Quaternion>()
+    private var poseNeutral: Quaternion? = null
+    private var previousPoseQuaternion: Quaternion? = null
+    private var previousTimestampNanos = 0L
+    private var discontinuity = 0
+
     private const val CALIBRATION_SAMPLE_COUNT = 10
+    private const val POSE_CALIBRATION_SAMPLE_COUNT = 25
     private const val ORIENTATION_OFFSET = 5500
 
-    fun processPacket(packet: ByteArray) {
-        val o1 = bytesToInt(packet[43], packet[44])
-        val o2 = bytesToInt(packet[45], packet[46])
-        val o3 = bytesToInt(packet[47], packet[48])
+    /**
+     * Parses and consumes a `0x17` packet, returning every motion sample it carried.
+     *
+     * The visualizer orientation keeps the legacy pitch/yaw math so existing UI behaviour
+     * is unchanged; [pose] carries the full quaternion-derived rotation vector used by the
+     * system head-tracker bridge.
+     */
+    @Synchronized
+    fun processPacket(packet: ByteArray): List<HeadTrackingSample> {
+        val samples = HeadTrackingParser.parse(packet)
+        for (sample in samples) {
+            processSample(sample)
+        }
+        return samples
+    }
 
-        val horizontalAccel = bytesToInt(packet[51], packet[52]).toFloat()
-        val verticalAccel = bytesToInt(packet[53], packet[54]).toFloat()
-
+    private fun processSample(sample: HeadTrackingSample) {
+        val (o1, o2, o3) = sample.attitudeRaw
         if (!isCalibrated) {
             calibrationSamples.add(Triple(o1, o2, o3))
             if (calibrationSamples.size >= CALIBRATION_SAMPLE_COUNT) {
                 calibrate()
             }
+        } else {
+            _orientation.value = calculateOrientation(o1, o2, o3)
+            _acceleration.value = Acceleration(
+                vertical = sample.rotationRate[2].toFloat(),
+                horizontal = sample.rotationRate[1].toFloat(),
+            )
+        }
+
+        val neutral = poseNeutral
+        if (neutral == null) {
+            poseCalibrationSamples.add(sample.quaternion)
+            if (poseCalibrationSamples.size >= POSE_CALIBRATION_SAMPLE_COUNT) {
+                poseNeutral = Quaternion.average(poseCalibrationSamples)
+                previousPoseQuaternion = sample.quaternion
+                previousTimestampNanos = sample.timestampNanos
+                discontinuity++
+                _pose.value = HeadPose(FloatArray(3), FloatArray(3), discontinuity)
+            }
             return
         }
 
-        val orientation = calculateOrientation(o1, o2, o3)
-        _orientation.value = orientation
+        var relative = neutral.conjugate() * sample.quaternion
+        if (relative.w < 0f) relative = relative.negated()
+        val deltaSeconds =
+            (sample.timestampNanos - previousTimestampNanos) / 1_000_000_000.0
+        val angularVelocity = previousPoseQuaternion?.let {
+            HeadTrackingParser.angularVelocity(it, sample.quaternion, deltaSeconds)
+        } ?: FloatArray(3)
 
-        _acceleration.value = Acceleration(verticalAccel, horizontalAccel)
+        previousPoseQuaternion = sample.quaternion
+        previousTimestampNanos = sample.timestampNanos
+        _pose.value = HeadPose(
+            rotationVector = HeadTrackingParser.toRotationVector(relative),
+            angularVelocity = angularVelocity,
+            discontinuity = discontinuity,
+        )
     }
 
     private fun calibrate() {
@@ -88,14 +150,28 @@ object HeadTracking {
         return Orientation(pitch, yaw)
     }
 
-    private fun bytesToInt(b1: Byte, b2: Byte): Int {
-        return (b2.toInt() shl 8) or (b1.toInt() and 0xFF)
+    /** Re-captures the neutral orientation without clearing the visualizer calibration. */
+    @Synchronized
+    fun recenter() {
+        poseCalibrationSamples.clear()
+        poseNeutral = null
+        previousPoseQuaternion = null
+        previousTimestampNanos = 0L
+        discontinuity++
+        _pose.value = null
     }
 
+    @Synchronized
     fun reset() {
         calibrationSamples.clear()
         isCalibrated = false
+        poseCalibrationSamples.clear()
+        poseNeutral = null
+        previousPoseQuaternion = null
+        previousTimestampNanos = 0L
+        discontinuity++
         _orientation.value = Orientation()
         _acceleration.value = Acceleration()
+        _pose.value = null
     }
 }

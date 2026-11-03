@@ -245,8 +245,15 @@ class AirPodsNotifications {
     }
 }
 
+/**
+ * True when the packet is an AirPods `0x17` head-tracking notification.
+ *
+ * Motion sample packets are larger than the short stream status/ack packets. The raw
+ * packet log uses this only to keep the head-tracking stream out of the general log;
+ * [me.kavishdevar.librepods.utils.HeadTrackingParser] does the real sample parsing.
+ */
 fun isHeadTrackingData(data: ByteArray): Boolean {
-    if (data.size <= 60) return false
+    if (data.size <= 70) return false
 
     val prefixPattern = byteArrayOf(
         0x04, 0x00, 0x04, 0x00, 0x17, 0x00, 0x00, 0x00,
@@ -256,10 +263,6 @@ fun isHeadTrackingData(data: ByteArray): Boolean {
     for (i in prefixPattern.indices) {
         if (data[i] != prefixPattern[i]) return false
     }
-
-    if (data[10] != 0x44.toByte() && data[10] != 0x45.toByte()) return false
-
-    if (data[11] != 0x00.toByte()) return false
 
     return true
 }

@@ -669,16 +669,32 @@ send pose to OpenTrack. LibrePods does not target Windows in `main`. This is out
   - **Activation gate:** a silent 5.1 `AudioTrack` probe is required to make AOSP activate
     the sensor; with no immersive track, `HeadSensor` stays `INVALID`. This confirms the
     stereo-content limitation in practice.
-  - **Still pending:** Shizuku UserService integration (the test used `adb shell`, the same
-    shell UID but not the Shizuku Binder transport); real AirPods `0x17` pose, axis mapping,
-    and latency; production host-gated streaming; audible HRTF/effect output.
+  - **Real AirPods 4 ANC `0x17` stream captured (2026-11-03).** With the AirPods in the
+    user's ears, the app sent stream 14 (`0x0E`) and then stream 16 (`0x10`) 200 ms later;
+    the accessory streamed full samples at ~25 Hz. Each motion sample is the 58-byte blob at
+    `3A 3E 08 <service> 1A 3A`; the sample-carrying `cmd` observed in the capture used
+    service 14, while service 16 also carried status sub-messages. Layout confirmed on
+    AirPods 4: `01` version, u64 timestamp at 1, qxyz Q15 at 20/22/24, rotation rate at
+    26/28/30, user acceleration at 38/40/42, gravity at 44/46/48 (|g| ~1020), counter u32 at
+    54 in 5 ms ticks. The first samples carry a zero attitude and are skipped; a 99-byte
+    packet can contain both status and a sample.
+  - **Parser/pose conversion implemented in the app.** `HeadTrackingParser` walks the
+    protobuf, returns every sample in a batched packet, reconstructs positive `w`, and
+    rejects zero-attitude warm-up plus corrupt attitudes. `HeadTracking` captures a 25-sample
+    neutral orientation, emits a relative rotation vector and angular velocity through
+    `HeadTracking.pose`, and keeps the legacy pitch/yaw visualizer fields. Unit tests cover
+    the real capture, batching, framing, near-identity/180-degree attitudes, malformed
+    truncation, rotation-vector/angular-velocity math, calibration and recenter.
+  - **Still pending:** AirPods-to-Android axis mapping (the quaternion frame is not yet
+    validated with nod/shake motion); Shizuku UserService integration (the UHID test used
+    `adb shell`, the same shell UID but not the Shizuku Binder transport); 25 Hz source rate
+    vs. the 50 Hz UHID input requirement; production host-gated streaming; audible
+    HRTF/effect output.
 
 ### 6.6 CI
 
-- The repository currently has no Android unit-test source set and `ci-android.yml` only
-  assembles the APK; there is no JUnit dependency or test task. Add `app/src/test`, add
-  `testImplementation(junit/kotlin-test)`, and add `./gradlew testFossDebugUnitTest` to
-  `ci-android.yml` as part of this work.
+- `app/src/test` now exists with JUnit 4 tests for the head-tracking parser and pose math;
+  `ci-android.yml` runs `./gradlew testFossDebugUnitTest` before the APK build.
 - The native helper's UHID logic can be unit-tested on Linux with a fake `/dev/uhid` or a
   small harness; device tests remain manual.
 
