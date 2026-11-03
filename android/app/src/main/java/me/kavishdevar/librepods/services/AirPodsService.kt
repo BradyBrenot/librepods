@@ -1528,6 +1528,9 @@ class AirPodsService : Service(), SharedPreferences.OnSharedPreferenceChangeList
                     !BuildConfig.PLAY_BUILD &&
                     sharedPreferences.getBoolean("system_spatial_audio_enabled", false)
                 ) {
+                    HeadTrackerBridge.setLeadMs(
+                        preferences.getInt("system_spatial_audio_lead_ms", 0),
+                    )
                     HeadTrackerBridge.ensureStarted(this, macAddress)
                 }
             }
